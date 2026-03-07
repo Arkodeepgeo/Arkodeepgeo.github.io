@@ -34,7 +34,7 @@
 
 </div>
 
-<div style="text-align:center">
+<div class="dots">
 
 <span class="dot" onclick="currentSlide(1)"></span>
 <span class="dot" onclick="currentSlide(2)"></span>
@@ -50,7 +50,8 @@
 <style>
 
 .carousel{
-max-width:900px;
+width:100%;
+max-width:1200px;
 margin:auto;
 }
 
@@ -62,6 +63,11 @@ object-fit:contain;
 
 .slide{
 display:none;
+}
+
+.dots{
+text-align:center;
+margin-top:8px;
 }
 
 .dot{
