@@ -49,22 +49,36 @@
 
 <style>
 
+/* fixed slider frame */
 .carousel{
 width:100%;
 max-width:1200px;
+height:420px;
 margin:auto;
+display:flex;
+align-items:center;
+justify-content:center;
+overflow:hidden;
 }
 
-.carousel img{
+/* slides */
+.slide{
+display:none;
 width:100%;
-max-height:80vh;
+height:100%;
+display:flex;
+align-items:center;
+justify-content:center;
+}
+
+/* image scaling */
+.carousel img{
+max-width:100%;
+max-height:100%;
 object-fit:contain;
 }
 
-.slide{
-display:none;
-}
-
+/* dots */
 .dots{
 text-align:center;
 margin-top:8px;
@@ -112,7 +126,7 @@ for(let i=0;i<dots.length;i++){
 dots[i].className=dots[i].className.replace(" active","");
 }
 
-slides[slideIndex-1].style.display="block";
+slides[slideIndex-1].style.display="flex";
 dots[slideIndex-1].className+=" active";
 
 }
