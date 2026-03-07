@@ -1,10 +1,8 @@
-# Zn–Pb Deposit Classification
-
 <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:60px;">
 
 <div style="width:50%;">
 
-<h3>Project Description</h3>
+<h3>Description</h3>
 
 <p>
 This project uses sphalerite trace element geochemistry to classify Zn–Pb deposit types using machine learning models such as Random Forest, XGBoost, SVM, AdaBoost and Stacking.
