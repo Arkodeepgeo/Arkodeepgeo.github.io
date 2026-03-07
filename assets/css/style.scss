@@ -4,32 +4,32 @@
 @import "{{ site.theme }}";
 
 /* Reduce header height */
-.page-header {
-  padding: 20px 10px !important;
+.page-header{
+padding-top:20px;
+padding-bottom:20px;
 }
 
-/* Reduce main title size */
-.project-name {
-  font-size: 2.2rem !important;
+/* Reduce title size */
+.project-name{
+font-size:2.2rem;
+margin-bottom:5px;
 }
 
 /* Reduce subtitle size */
-.project-tagline {
-  font-size: 1.2rem !important;
+.project-tagline{
+font-size:1rem;
+margin-bottom:0;
 }
 
-/* Reduce spacing of main content */
-.main-content {
-  padding-top: 10px !important;
-  padding-bottom: 10px !important;
+/* Reduce overall page spacing */
+.main-content{
+max-width:1200px;
+margin-top:10px;
 }
 
-/* Make workflow image smaller */
-.main-content img {
-  max-height: 22vh;
-}
-
-/* Reduce slider image height */
-.carousel img {
-  max-height: 35vh !important;
+/* Make slider images larger */
+.carousel img{
+width:100%;
+max-height:85vh;
+object-fit:contain;
 }
