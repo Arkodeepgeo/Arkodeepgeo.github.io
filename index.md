@@ -16,19 +16,10 @@ This project uses sphalerite trace element geochemistry to classify Zn–Pb depo
 
 ## Workflow
 
-![Workflow](Figures/workflow.png)
+<img src="Figures/workflow.png" style="max-height:30vh; display:block; margin:auto;">
 
 {% include slider.html %}
 
-<div style="
-position:relative;
-width:100%;
-margin-top:40px;
-font-size:14px;
-color:#666;
-text-align:right;
-">
-
+<div style="text-align:right; font-size:12px; margin-top:10px;">
 © Sengupta et al. 2026
-
 </div>
