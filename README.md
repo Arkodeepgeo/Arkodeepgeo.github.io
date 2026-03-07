@@ -1,1 +1,14 @@
-Sphalerite, a ubiquitous sulfide mineral in Zn-Pb deposits, exhibits chemical signatures reflecting diverse origins of fluid, metal, and ore-forming processes. This study implements the ensemble machine learning models of Boosting, Bagging, and Stacking on a compiled, published global database of the trace element analyses of sphalerite. Among the dimensionality reduction methods applied, t-distributed stochastic neighbor embedding (t-SNE), uniform manifold approximation and projection (UMAP), and the hybrid autoencoder–t–SNE models reveal markedly improved segregation and create distinct clusters, surpassing principal component analysis (PCA) results, showing significant overlap. The ensemble algorithms are evaluated against various supervised machine learning classifiers using statistical metrics. AdaBoost achieves the highest accuracy (97.50%), recall (97.62%), and specificity (99.36%), closely followed by SVM, XGBoost, and Stacking. Furthermore, high Cohen’s Kappa (96.27–96.71%) and MCC (96.72%) values for AdaBoost and SVM suggest an impressive agreement with actual classifications, indicating their predictive superiority. For classifying individual deposits, SVM and AdaBoost are particularly effective in identifying MVT deposits, while MLP, XGBoost, and AdaBoost excel in classifying SEDEX and skarn types. Feature importance analysis suggests Ge, Mn, Cd, Fe, In, and Ga as key discriminators for deposit classification. Specifically, Ge shows high importance for MVT and VMS types, Mn for epithermal and skarn types, and Cd for SEDEX type deposits. The models accurately categorize the Zawarmala, Xulaojiugou, and Beishan Zn-Pb deposits, aligning with geological observations. To facilitate user accessibility, an R Shiny web application (https://arkodeepsg.shinyapps.io/ZnPb_Deposit_Classifier/) has been developed, enabling reliable predictions of Zn-Pb deposit types based on sphalerite trace element chemistry. 
+# Zn–Pb Deposit Classification Webpage
+
+Project webpage:
+
+https://arkodeepgeo.github.io
+
+This page presents a machine learning approach for classifying Zn–Pb deposit types based on sphalerite trace element geochemistry.
+
+The website includes:
+- Project overview
+- Machine learning workflow
+- Model results
+- Link to the web application
+- Code repository
