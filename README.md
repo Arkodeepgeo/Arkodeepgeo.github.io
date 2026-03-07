@@ -8,7 +8,6 @@ This page presents a machine learning approach for classifying Zn–Pb deposit t
 
 The website includes:
 - Project overview
-- Machine learning workflow
 - Model results
 - Link to the web application
 - Code repository
