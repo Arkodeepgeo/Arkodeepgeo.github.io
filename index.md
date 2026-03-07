@@ -5,7 +5,7 @@
 <h3>Description</h3>
 
 <p>
-This project uses sphalerite trace element geochemistry to classify Zn–Pb deposit types using machine learning models such as Random Forest, XGBoost, SVM, AdaBoost and Stacking.
+Sphalerite, a ubiquitous sulfide mineral in Zn-Pb deposits, exhibits chemical signatures reflecting diverse origins of fluid, metal, and ore-forming processes. This study implements the ensemble machine learning models of Boosting, Bagging, and Stacking on a compiled, published global database of the trace element analyses of sphalerite. 
 </p>
 
 <div style="display:flex; gap:60px; margin-top:20px;">
