@@ -1,48 +1,46 @@
 <div class="carousel">
 
-<div class="slide fade">
+<div class="slide">
 <img src="/Figures/Figure_1.jpg">
 </div>
 
-<div class="slide fade">
+<div class="slide">
 <img src="/Figures/Figure_2.jpg">
 </div>
 
-<div class="slide fade">
+<div class="slide">
 <img src="/Figures/Figure_3.jpg">
 </div>
 
-<div class="slide fade">
+<div class="slide">
 <img src="/Figures/Figure_4.jpg">
 </div>
 
-<div class="slide fade">
+<div class="slide">
 <img src="/Figures/Figure_5.jpg">
 </div>
 
-<div class="slide fade">
+<div class="slide">
 <img src="/Figures/Figure_6.jpg">
 </div>
 
-<div class="slide fade">
+<div class="slide">
 <img src="/Figures/Figure_7.jpg">
 </div>
 
-<div class="slide fade">
+<div class="slide">
 <img src="/Figures/Figure_8.jpg">
 </div>
 
-<div class="slide fade">
+<div class="slide">
 <img src="/Figures/Figure_9.jpg">
 </div>
 
-<div class="slide fade">
+<div class="slide">
 <img src="/Figures/Figure_10.jpg">
 </div>
 
 </div>
-
-<br>
 
 <div style="text-align:center">
 
@@ -64,12 +62,11 @@
 .carousel{
 max-width:900px;
 margin:auto;
-position:relative;
 }
 
 .carousel img{
 width:100%;
-height:500px;
+max-height:45vh;
 object-fit:contain;
 }
 
@@ -99,17 +96,17 @@ let slideIndex = 1;
 showSlides(slideIndex);
 
 function currentSlide(n){
-slideIndex = n;
+slideIndex=n;
 showSlides(slideIndex);
 }
 
 function showSlides(n){
 
-let slides = document.getElementsByClassName("slide");
-let dots = document.getElementsByClassName("dot");
+let slides=document.getElementsByClassName("slide");
+let dots=document.getElementsByClassName("dot");
 
-if(n > slides.length){slideIndex = 1}
-if(n < 1){slideIndex = slides.length}
+if(n>slides.length){slideIndex=1}
+if(n<1){slideIndex=slides.length}
 
 for(let i=0;i<slides.length;i++){
 slides[i].style.display="none";
