@@ -13,8 +13,8 @@ This project uses sphalerite trace-element geochemistry to classify Zn–Pb depo
 <h3>Code</h3>
 
 <p>
-<a href="https://github.com/Arkodeepgeo/Arkodeepgeo.github.io/blob/main/Full%20R%20Script.R" target="_blank">
-Full R Script
+<a href="https://github.com/Arkodeepgeo/Arkodeepgeo.github.io" target="_blank">
+Repository
 </a>
 </p>
 
