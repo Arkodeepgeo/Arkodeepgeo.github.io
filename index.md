@@ -12,8 +12,6 @@ This project uses sphalerite trace element geochemistry to classify Zn–Pb depo
 
 <div>
 
-<h3>Code</h3>
-
 <p>
 <a href="https://github.com/Arkodeepgeo/Arkodeepgeo.github.io" target="_blank">
 Repository
@@ -24,11 +22,9 @@ Repository
 
 <div>
 
-<h3>Web Application</h3>
-
 <p>
 <a href="https://arkodeepsg.shinyapps.io/ZnPb_Deposit_Classifier/" target="_blank">
-Zn-Pb Deposit Classifier
+Web Application
 </a>
 </p>
 
