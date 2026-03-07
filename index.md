@@ -1,8 +1,8 @@
 # Zn–Pb Deposit Classification
 
-<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:30px; flex-wrap:wrap;">
+<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:40px; flex-wrap:wrap;">
 
-<div style="flex:1; min-width:300px;">
+<div style="flex:1; min-width:320px;">
 
 ### Project Description
 
@@ -18,7 +18,7 @@ This project uses sphalerite trace element geochemistry to classify Zn–Pb depo
 
 </div>
 
-<div style="flex:1; min-width:350px;">
+<div style="flex:1; min-width:360px;">
 
 {% include slider.html %}
 
