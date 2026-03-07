@@ -4,17 +4,25 @@
 
 <div style="flex:1; min-width:320px;">
 
-### Project Description
+<h3>Project Description</h3>
 
+<p>
 This project uses sphalerite trace element geochemistry to classify Zn–Pb deposit types using machine learning models such as Random Forest, XGBoost, SVM, AdaBoost and Stacking.
+</p>
 
-### Code
+<h3>Code</h3>
 
-[Full R Script](Full%20R%20Script.R)
+<p>
+<a href="Full%20R%20Script.R" target="_blank">Full R Script</a>
+</p>
 
-### Web Application
+<h3>Web Application</h3>
 
-[Zn-Pb Deposit Classifier](https://arkodeepsg.shinyapps.io/ZnPb_Deposit_Classifier/)
+<p>
+<a href="https://arkodeepsg.shinyapps.io/ZnPb_Deposit_Classifier/" target="_blank">
+Zn-Pb Deposit Classifier
+</a>
+</p>
 
 </div>
 
