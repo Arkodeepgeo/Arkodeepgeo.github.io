@@ -1,0 +1,124 @@
+<div class="carousel">
+
+<div class="slide fade">
+<img src="/Figures/Figure_1.jpg">
+</div>
+
+<div class="slide fade">
+<img src="/Figures/Figure_2.jpg">
+</div>
+
+<div class="slide fade">
+<img src="/Figures/Figure_3.jpg">
+</div>
+
+<div class="slide fade">
+<img src="/Figures/Figure_4.jpg">
+</div>
+
+<div class="slide fade">
+<img src="/Figures/Figure_5.jpg">
+</div>
+
+<div class="slide fade">
+<img src="/Figures/Figure_6.jpg">
+</div>
+
+<div class="slide fade">
+<img src="/Figures/Figure_7.jpg">
+</div>
+
+<div class="slide fade">
+<img src="/Figures/Figure_8.jpg">
+</div>
+
+<div class="slide fade">
+<img src="/Figures/Figure_9.jpg">
+</div>
+
+<div class="slide fade">
+<img src="/Figures/Figure_10.jpg">
+</div>
+
+</div>
+
+<div style="text-align:center">
+
+<span class="dot"></span>
+<span class="dot"></span>
+<span class="dot"></span>
+<span class="dot"></span>
+<span class="dot"></span>
+<span class="dot"></span>
+<span class="dot"></span>
+<span class="dot"></span>
+<span class="dot"></span>
+<span class="dot"></span>
+
+</div>
+
+<style>
+
+.carousel{
+max-width:900px;
+margin:auto;
+position:relative;
+}
+
+.carousel img{
+width:100%;
+height:500px;
+object-fit:contain;
+}
+
+.slide{
+display:none;
+}
+
+.dot{
+height:12px;
+width:12px;
+margin:5px;
+background:#bbb;
+border-radius:50%;
+display:inline-block;
+}
+
+.active{
+background:#717171;
+}
+
+</style>
+
+<script>
+
+let slideIndex = 0;
+showSlides();
+
+function showSlides(){
+
+let slides=document.getElementsByClassName("slide");
+let dots=document.getElementsByClassName("dot");
+
+for(let i=0;i<slides.length;i++){
+slides[i].style.display="none";
+}
+
+slideIndex++;
+
+if(slideIndex>slides.length){
+slideIndex=1;
+}
+
+for(let i=0;i<dots.length;i++){
+dots[i].className=dots[i].className.replace(" active","");
+}
+
+slides[slideIndex-1].style.display="block";
+dots[slideIndex-1].className+=" active";
+
+setTimeout(showSlides,3000);
+
+}
+
+</script>
