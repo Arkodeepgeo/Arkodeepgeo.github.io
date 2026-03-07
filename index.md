@@ -1,29 +1,30 @@
 # Zn–Pb Deposit Classification
 
-Categorization of Zn–Pb deposits based on sphalerite geochemistry using machine learning.
+<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:30px; flex-wrap:wrap;">
 
-## Project Description
+<div style="flex:1; min-width:300px;">
+
+### Project Description
 
 This project uses sphalerite trace element geochemistry to classify Zn–Pb deposit types using machine learning models such as Random Forest, XGBoost, SVM, AdaBoost and Stacking.
 
-## Code Repository
+### Code Repository
 
-[View GitHub Code](https://github.com/Arkodeepgeo)
+[View Full R Script](Full%20R%20Script.R)
 
-## Web Application
+### Web Application
 
-[Open Web App](https://your-shiny-webapp-link)
-
-## Workflow
-
-<div style="display:flex; justify-content:center; gap:20px; flex-wrap:wrap; margin-bottom:15px;">
-
-<img src="Figures/Workflow1.jpg" style="max-height:22vh; object-fit:contain;">
-<img src="Figures/Workflow2.jpg" style="max-height:22vh; object-fit:contain;">
+[Launch Zn–Pb Deposit Classifier](https://arkodeepsg.shinyapps.io/ZnPb_Deposit_Classifier/)
 
 </div>
 
+<div style="flex:1; min-width:350px;">
+
 {% include slider.html %}
+
+</div>
+
+</div>
 
 <div style="text-align:right; font-size:12px; margin-top:10px;">
 © Sengupta et al. 2026
