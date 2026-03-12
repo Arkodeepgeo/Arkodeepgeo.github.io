@@ -1,4 +1,4 @@
-#Loading the required libraries
+############ Load Required Libraries
 
 library(ggplot2)
 library(tidyr)
@@ -19,136 +19,172 @@ library(xgboost)
 library(e1071)
 library(randomForest)
 library(nnet)
+library(pROC)
+library(shapviz)
+library(fmsb)
+library(fastshap)
+library(shapviz)
+library(patchwork)
 
-#Importing the dataset
+############ Import Dataset
 
-dataset <- read.csv("SPHALERITE_CHEMISTRY2025.csv")
-
-#Remove rows with missing values
+dataset <- read.csv("Datasheet.csv")
 
 dataset <- na.omit(dataset)
 
-############### Part 1: Box Plots #######################
+############ Part 1: Box Plots
 
-#Selecting the relevant columns
+deposit_colors <- c(
+  Epithermal = "#E41A1C",
+  MVT        = "#377EB8",
+  SEDEX      = "#4DAF4A",
+  Skarn      = "#984EA3",
+  VMS        = "#FF7F00"
+)
 
-dataset_new <- dataset[4:16]
+dataset_new <- dataset[,4:16]
 
-unique_categories <- dataset_new %>% distinct(dataset_new$Deposit.type)
+unique_categories <- dataset_new %>% distinct(Deposit.type)
 print(unique_categories)
 
-#Convert data from wide to long format
-
-dataset_long <- dataset_new %>% gather(key = "Element", value = "Concentration", -Deposit.type)
-
-#Remove non-finite values (NA, NaN, Inf) and zero values (log10 can't handle 0)
-
-dataset_long <- dataset_long %>% filter(is.finite(Concentration) & Concentration > 0)
-
-elements <- c("Fe", "Mn", "Co", "Cu", "Ga", "Ge", "Ag", "Cd", "In", "Sn", "Sb", "Pb")
-
-#Modify element names to include "(ppm)" and format correctly for facet labels
-
-dataset_long$Element <- factor(dataset_long$Element, levels = elements, labels = paste0(elements, " (ppm)"))
-
-#Box and whisker plots grouped by deposit type
-
-ggplot(dataset_long, aes(x = Deposit.type, y = Concentration, fill = Deposit.type)) +
-  stat_boxplot(geom = "errorbar", width = 0.3, linewidth = 0.2) + # Whiskers show min/max
-  geom_boxplot(outlier.shape = NA, color = "black", width = 0.6, linewidth = 0.3) + # Thin median line
-  stat_summary(fun = mean, geom = "point", shape = 21, size = 2, fill = "gray") + # Small mean point
-  facet_wrap(~Element, scales = "free_y", ncol = 3, strip.position = "left") + # Exactly 3 plots per row
-  scale_y_log10(labels = trans_format("log10", math_format(10^.x))) + # Exponent format (10^-1, 10^2, etc.)
-  scale_x_discrete(expand = expansion(mult = 0.2)) + # Centers boxplots
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(size = 9, color = "black", angle = 45, hjust = 1), # Set x-axis labels size 9, black
-    axis.text.y = element_text(size = 9, color = "black"), # Set y-axis labels size 9, black
-    axis.title = element_blank(), # Remove overall x and y labels
-    strip.text.y.left = element_text(face = "bold", size = 9, angle = 90, hjust = 0.5, vjust = 1), # Element labels further left
-    strip.placement = "outside", # Ensure element names appear outside the tick labels
-    panel.spacing = unit(0.4, "lines"), # Reduce space between subplots
-    plot.title = element_blank(), # Remove title
-    legend.position = "none",
-    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.3), # Black border around each plot
-    panel.grid.major = element_blank(), # Remove major grid lines
-    panel.grid.minor = element_blank(),# Remove minor grid lines
-    axis.ticks.y = element_line(color = "black"),# Ensure y-axis tick marks are visible for each subplot
-    aspect.ratio = 1 # Prevent excessive elongation
+dataset_long <- dataset_new %>%
+  pivot_longer(
+    cols = -Deposit.type,
+    names_to = "Element",
+    values_to = "Concentration"
   )
 
-############ Part 2: Dimensionality reduction analysis
+dataset_long <- dataset_long %>%
+  filter(is.finite(Concentration) & Concentration > 0)
 
-############ Pre-processing 
+elements <- c("Fe","Mn","Co","Cu","Ga","Ge","Ag","Cd","In","Sn","Sb","Pb")
 
-dataset_ml <- dataset[, 4:16]
+dataset_long$Element <- factor(
+  dataset_long$Element,
+  levels = elements,
+  labels = paste0(elements," (ppm)")
+)
+
+ggplot(dataset_long,
+       aes(x = Deposit.type,
+           y = Concentration,
+           fill = Deposit.type)) +
+  
+  stat_boxplot(geom="errorbar",width=0.3,linewidth=0.2) +
+  
+  geom_boxplot(
+    outlier.shape = NA,
+    color="black",
+    width=0.6,
+    linewidth=0.3
+  ) +
+  
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    shape = 21,
+    size = 2,
+    fill = "gray"
+  ) +
+  
+  facet_wrap(~Element,
+             scales="free_y",
+             ncol=3,
+             strip.position="left") +
+  
+  scale_fill_manual(values = deposit_colors) + 
+  
+  scale_y_log10(
+    labels = trans_format("log10",math_format(10^.x))
+  ) +
+  
+  scale_x_discrete(expand=expansion(mult=0.2)) +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.text.x = element_text(size=9,color="black",angle=45,hjust=1),
+    axis.text.y = element_text(size=9,color="black"),
+    axis.title = element_blank(),
+    strip.text.y.left = element_text(face="bold",size=9,angle=90),
+    strip.placement="outside",
+    panel.spacing=unit(0.4,"lines"),
+    legend.position="none",
+    panel.border=element_rect(color="black",fill=NA,linewidth=0.3),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),
+    axis.ticks.y=element_line(color="black"),
+    aspect.ratio=1
+  )
+
+############ Dimensionality Reduction
+
+dataset_ml <- dataset[,4:16]
+
 dataset_ml$Deposit.type <- as.factor(dataset_ml$Deposit.type)
 
 features <- dataset_ml[,1:12]
 labels <- dataset_ml$Deposit.type
 
-############ Outlier Removal Functions ############
+############ Uniform Outlier Removal
 
-#Used before dimensionality reduction
-
-
-remove_outliers_strict <- function(df){
+remove_outliers <- function(df, max_outlier_cols = 3){
   
   Q1 <- apply(df,2,quantile,0.25)
   Q3 <- apply(df,2,quantile,0.75)
+  
   IQR <- Q3 - Q1
   
-  lower <- Q1 - 1.5*IQR
-  upper <- Q3 + 1.5*IQR
-  
-  keep <- apply(df,1,function(row) all(row >= lower & row <= upper))
-  
-  list(data = df[keep,], indices = which(keep))
-}
-
-# Used before ML models
-
-remove_outliers_ml <- function(df, max_outlier_cols = 2){
-  
-  Q1 <- apply(df,2,quantile,0.25)
-  Q3 <- apply(df,2,quantile,0.75)
-  IQR <- Q3 - Q1
-  
-  lower <- Q1 - 1.5*IQR
-  upper <- Q3 + 1.5*IQR
+  lower <- Q1 - 1.5 * IQR
+  upper <- Q3 + 1.5 * IQR
   
   keep <- apply(df,1,function(row){
     sum(row < lower | row > upper) <= max_outlier_cols
   })
   
-  list(data = df[keep,], indices = which(keep))
+  list(
+    data = df[keep,],
+    indices = which(keep)
+  )
 }
 
-outlier_result <- remove_outliers_strict(features)
+outlier_result <- remove_outliers(features, max_outlier_cols = 3)
+
 features_clean <- outlier_result$data
 labels_clean <- labels[outlier_result$indices]
 
-# CLR Transformation
+############ CLR Transformation
 
 clr_transform <- function(x){
+  
   x <- as.matrix(x)
-  if(any(x<=0)) stop("CLR requires positive values")
+  
+  if(any(x <= 0))
+    stop("CLR requires positive values")
+  
   log_x <- log(x)
+  
   gm <- rowMeans(log_x)
+  
   sweep(log_x,1,gm,"-")
 }
 
 features_clr <- clr_transform(features_clean + 1e-6)
 
-# Standardize
+############ Standardization
 
 features_scaled <- scale(features_clr)
 
-############ A: PCA
+############ PCA
 
 set.seed(123)
 
-pca_result <- PCA(features_scaled, scale.unit = TRUE, ncp = 3, graph = FALSE)
+pca_result <- PCA(
+  features_scaled,
+  scale.unit = TRUE,
+  ncp = 3,
+  graph = FALSE
+)
 
 pca_df <- data.frame(
   PC1 = pca_result$ind$coord[,1],
@@ -156,16 +192,21 @@ pca_df <- data.frame(
   Deposit.type = labels_clean
 )
 
-ggplot(pca_df,aes(PC1,PC2,color=Deposit.type))+
-  geom_point(size=1)+
+ggplot(pca_df,aes(PC1,PC2,color=Deposit.type)) +
+  geom_point(size=1) +
+  scale_color_manual(values = deposit_colors) +
+  
   labs(
-    title="PCA: Outlier-filtered CLR-transformed data",
+    title="PCA: CLR-transformed geochemical data",
     x=paste0("PC1 (",round(pca_result$eig[1,2],1),"%)"),
     y=paste0("PC2 (",round(pca_result$eig[2,2],1),"%)")
-  )+
-  xlim(-4,4)+
-  ylim(-4,4)+
-  theme_minimal(base_size=9)+
+  ) +
+  
+  xlim(-4,4) +
+  ylim(-4,4) +
+  
+  theme_minimal(base_size=9) +
+  
   theme(
     panel.grid=element_blank(),
     panel.border=element_rect(color="black",fill=NA),
@@ -173,7 +214,7 @@ ggplot(pca_df,aes(PC1,PC2,color=Deposit.type))+
     axis.ticks.length=unit(0.15,"cm"),
     legend.position="none",
     plot.title=element_text(hjust=0.5)
-  )
+  )    
 
 ############ B: t-SNE
 
@@ -187,10 +228,11 @@ set.seed(123)
 
 tsne_result <- Rtsne(
   features_tsne,
-  dims=2,
-  perplexity=40,
-  verbose=TRUE,
-  max_iter=1000
+  dims = 2,
+  perplexity = 50,
+  theta = 0.5,
+  eta = 200,
+  max_iter = 1000
 )
 
 tsne_df <- data.frame(
@@ -199,17 +241,18 @@ tsne_df <- data.frame(
   Deposit.type = labels_tsne
 )
 
-ggplot(tsne_df,aes(X,Y,color=Deposit.type))+
-  geom_point(size=1)+
-  labs(x="t-SNE1",y="t-SNE2")+
-  theme_minimal(base_size=9)+
+ggplot(tsne_df, aes(X, Y, color = Deposit.type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = deposit_colors) +
+  labs(x = "t-SNE1", y = "t-SNE2") +
+  theme_minimal(base_size = 9) +
   theme(
-    legend.title=element_blank(),
-    panel.border=element_rect(color="black",fill=NA),
-    axis.ticks=element_line(color="black"),
-    axis.ticks.length=unit(0.15,"cm"),
-    panel.grid=element_blank(),
-    legend.position="none"
+    legend.title = element_blank(),
+    panel.border = element_rect(color = "black", fill = NA),
+    axis.ticks = element_line(color = "black"),
+    axis.ticks.length = unit(0.15,"cm"),
+    panel.grid = element_blank(),
+    legend.position = "none"
   )
 
 ############ C: UMAP
@@ -224,244 +267,99 @@ umap_df <- data.frame(
   Deposit.type = labels_clean
 )
 
-ggplot(umap_df,aes(UMAP1,UMAP2,color=Deposit.type))+
-  geom_point(size=1)+
-  labs(
-    title="UMAP: Outlier-filtered CLR-transformed data",
-    x="UMAP Dimension 1",
-    y="UMAP Dimension 2"
-  )+
-  theme_minimal(base_size=9)+
-  theme(
-    legend.title=element_blank(),
-    panel.border=element_rect(color="black",fill=NA),
-    axis.ticks.length=unit(0.15,"cm"),
-    axis.ticks=element_line(color="black"),
-    panel.grid=element_blank(),
-    legend.position="none"
-  )
-
-############ D: Autoencoder
-
-# Start H2O
-
-h2o.init(
-  nthreads = 1,
-  max_mem_size = "4G"
-)
-
-# Initialize H2O
-
-if (!h2o::h2o.clusterIsUp()) {
-  h2o.init(
-    nthreads = 1,
-    max_mem_size = "4G",
-    enable_assertions = TRUE
-  )
-}
-
-# Convert to H2O frame
-
-h2o_data <- as.h2o(features_scaled)
-
-# Train autoencoder
-
-autoencoder <- h2o.deeplearning(
-  x = colnames(h2o_data),
-  training_frame = h2o_data,
-  autoencoder = TRUE,
-  hidden = c(8,4,8),
-  activation = "Tanh",
-  epochs = 200,
-  l1 = 1e-5,
-  seed = 123,
-  reproducible = TRUE
-)
-
-# Extract latent features
-
-ae_features <- as.data.frame(
-  h2o.deepfeatures(autoencoder, h2o_data, layer = 2)
-)
-
-ae_features$Deposit.type <- labels_clean
-
-# Plot Autoencoder projection
-
-ggplot(ae_features, aes(x = DF.L2.C1, y = DF.L2.C2, color = Deposit.type)) +
-  geom_point(size = 0.8) +
-  theme_minimal(base_size = 9) +
-  labs(
-    x = "Autoencoder Dimension 1",
-    y = "Autoencoder Dimension 2"
-  ) +
-  theme(
-    legend.position = "none",
-    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.8),
-    axis.ticks = element_line(color = "black"),
-    panel.grid = element_blank()
-  )
-
-############ E: Autoencoder+t-SNE
-
-# Remove duplicates
-
-ae_unique <- !duplicated(ae_features[,1:2])
-ae_features_filtered <- ae_features[ae_unique, ]
-
-labels_filtered <- ae_features_filtered$Deposit.type
-
-# Matrix input for t-SNE
-
-tsne_input <- as.matrix(ae_features_filtered[,1:2])
-
-set.seed(123)
-
-# Run t-SNE on Autoencoder
-
-tsne_result_ae <- Rtsne(
-  tsne_input,
-  dims = 2,
-  perplexity = 50,
-  verbose = TRUE,
-  max_iter = 1000
-)
-
-# Prepare data for plotting
-
-tsne_df_ae <- data.frame(
-  X = tsne_result_ae$Y[,1],
-  Y = tsne_result_ae$Y[,2],
-  Deposit.type = labels_filtered
-)
-
-# Plot Hybrid Model
-
-ggplot(tsne_df_ae, aes(X, Y, color = Deposit.type)) +
+ggplot(umap_df, aes(UMAP1, UMAP2, color = Deposit.type)) +
   geom_point(size = 1) +
-  theme_minimal(base_size = 9) +
+  scale_color_manual(values = deposit_colors) +
   labs(
-    title = "t-SNE on Autoencoder Latent Features",
-    x = "t-SNE Dimension 1",
-    y = "t-SNE Dimension 2"
+    title = "UMAP: Outlier-filtered CLR-transformed data",
+    x = "UMAP Dimension 1",
+    y = "UMAP Dimension 2"
   ) +
+  theme_minimal(base_size = 9) +
   theme(
     legend.title = element_blank(),
-    plot.title = element_text(hjust = 0.5),
     panel.border = element_rect(color = "black", fill = NA),
+    axis.ticks.length = unit(0.15,"cm"),
     axis.ticks = element_line(color = "black"),
-    axis.ticks.length = unit(0.15, "cm"),
-    legend.position = "none",
-    panel.grid = element_blank()
+    panel.grid = element_blank(),
+    legend.position = "none"
   )
 
-############ F: Autoencoder + UMAP Hybrid
+############ Machine Learning
 
-# Run UMAP on Autoencoder
+# Use the same processed data
 
-set.seed(123)
-
-umap_result_ae <- uwot::umap(ae_features[, 1:2])
-
-# Prepare data for plotting
-
-umap_df_ae <- data.frame(
-  UMAP1 = umap_result_ae[, 1],
-  UMAP2 = umap_result_ae[, 2],
-  Deposit.type = ae_features$Deposit.type
-)
-
-# Plot Hybrid Model
-
-ggplot(umap_df_ae, aes(UMAP1,UMAP2,color=Deposit.type))+
-  geom_point(size=1)+
-  theme_minimal(base_size=9)+
-  labs(
-    title="UMAP on Autoencoder Latent Features",
-    x="UMAP Dimension 1",
-    y="UMAP Dimension 2"
-  )+
-  theme(
-    legend.title=element_blank(),
-    plot.title=element_text(hjust=0.5),
-    panel.border=element_rect(color="black",fill=NA),
-    axis.ticks=element_line(color="black"),
-    axis.ticks.length=unit(0.15,"cm"),
-    legend.position="none",
-    panel.grid=element_blank()
-  )
-
-############ Part 4: Machine Learning Models############
-
-# **LESS STRICT OUTLIER REMOVAL BEFORE ML**
-
-outlier_result_ml <- remove_outliers_ml(features)
-
-features_ml <- outlier_result_ml$data
-labels_ml <- labels[outlier_result_ml$indices]
-
-
-# CLR Transformation
-features_clr_ml <- clr_transform(features_ml + 1e-6)
-
-
-# Standardization
-features_scaled_ml <- scale(features_clr_ml)
-
+features_ml <- features_scaled
+labels_ml <- labels_clean
 
 ############ Train/Test Split
 
 set.seed(123)
 
-train_idx <- createDataPartition(labels_ml, p = 0.8, list = FALSE)
+train_idx <- createDataPartition(labels_ml, p=0.8, list=FALSE)
 
-X_train <- features_scaled_ml[train_idx, ]
+X_train <- features_ml[train_idx,]
 y_train <- labels_ml[train_idx]
 
-X_test <- features_scaled_ml[-train_idx, ]
+X_test <- features_ml[-train_idx,]
 y_test <- labels_ml[-train_idx]
 
 num_class <- length(levels(y_train))
 
-############ A: XGboost
+############ Performance Storage for Radar Plot
 
-# Bayesian Optimization
+performance <- data.frame(
+  Model = character(),
+  Accuracy = numeric(),
+  Precision = numeric(),
+  Recall = numeric(),
+  Specificity = numeric(),
+  F1_Score = numeric(),
+  Cohens_Kappa = numeric(),
+  MCC = numeric(),
+  stringsAsFactors = FALSE
+)
 
-xgb_cv_bayes <- function(eta, max_depth, subsample, colsample_bytree){
+############ XGBoost ############
+
+#Bayesian Optimization
+
+xgb_cv_bayes <- function(eta,max_depth,subsample,colsample_bytree){
   
   param <- list(
-    objective = "multi:softmax",
-    num_class = num_class,
-    eval_metric = "merror",
-    eta = eta,
-    max_depth = as.integer(max_depth),
-    subsample = subsample,
-    colsample_bytree = colsample_bytree
+    objective="multi:softprob",
+    num_class=num_class,
+    eval_metric="merror",
+    learning_rate=eta,
+    max_depth=as.integer(max_depth),
+    subsample=subsample,
+    colsample_bytree=colsample_bytree,
+    tree_method="hist"
   )
   
-  dtrain <- xgb.DMatrix(data = X_train, label = as.integer(y_train)-1)
+  dtrain <- xgb.DMatrix(data=X_train,label=as.integer(y_train)-1)
   
   cv <- xgb.cv(
-    params = param,
-    data = dtrain,
-    nrounds = 100,
-    nfold = 5,
-    verbose = 0,
-    early_stopping_rounds = 10
+    params=param,
+    data=dtrain,
+    nrounds=100,
+    nfold=5,
+    verbose=0,
+    early_stopping_rounds=10
   )
   
-  list(Score = -min(cv$evaluation_log$test_merror_mean), Pred = 0)
+  list(Score=-min(cv$evaluation_log$test_merror_mean),Pred=0)
 }
 
 set.seed(123)
 
 bayes_opt_result <- BayesianOptimization(
-  FUN = xgb_cv_bayes,
-  bounds = list(
-    eta = c(0.01,0.3),
-    max_depth = c(3L,10L),
-    subsample = c(0.5,1),
-    colsample_bytree = c(0.5,1)
+  FUN=xgb_cv_bayes,
+  bounds=list(
+    eta=c(0.01,0.3),
+    max_depth=c(3L,10L),
+    subsample=c(0.5,1),
+    colsample_bytree=c(0.5,1)
   ),
   init_points = 10,
   n_iter = 20
@@ -469,71 +367,97 @@ bayes_opt_result <- BayesianOptimization(
 
 best <- bayes_opt_result$Best_Par
 
-dtrain <- xgb.DMatrix(data = X_train, label = as.integer(y_train)-1)
+############ Final XGBoost Model
 
-final_model <- xgboost(
-  data = dtrain,
-  objective = "multi:softmax",
-  num_class = num_class,
-  nrounds = 100,
-  eta = best["eta"],
-  max_depth = as.integer(best["max_depth"]),
-  subsample = best["subsample"],
-  colsample_bytree = best["colsample_bytree"],
-  verbose = 0
+dtrain <- xgb.DMatrix(data=X_train,label=as.integer(y_train)-1)
+
+params <- list(
+  objective="multi:softprob",
+  num_class=num_class,
+  eval_metric="merror",
+  learning_rate=best["eta"],
+  max_depth=as.integer(best["max_depth"]),
+  subsample=best["subsample"],
+  colsample_bytree=best["colsample_bytree"],
+  tree_method="hist"
 )
 
-# Prediction
+final_model <- xgb.train(
+  params=params,
+  data=dtrain,
+  nrounds=100,
+  verbose=0
+)
+
+############ Prediction
 
 dtest <- xgb.DMatrix(data = X_test)
 
-preds <- predict(final_model, dtest)
+pred_prob <- predict(final_model,dtest)
+
+pred_matrix <- matrix(pred_prob,nrow=nrow(X_test),ncol=num_class)
+
+preds <- max.col(pred_matrix)-1
 
 preds_factor <- factor(preds,
-                       levels = 0:(num_class-1),
-                       labels = levels(y_train))
+                       levels=0:(num_class-1),
+                       labels=levels(y_train))
 
-# Evaluation Metrics
+############ Evaluation Metrics
 
-conf <- caret::confusionMatrix(preds_factor, y_test)
+conf <- caret::confusionMatrix(preds_factor,y_test)
 
 acc <- as.numeric(conf$overall["Accuracy"])
 kappa <- as.numeric(conf$overall["Kappa"])
 
-precision <- MLmetrics::Precision(y_pred = preds_factor, y_true = y_test, positive = NULL)
-recall <- MLmetrics::Recall(y_pred = preds_factor, y_true = y_test, positive = NULL)
-f1 <- MLmetrics::F1_Score(y_pred = preds_factor, y_true = y_test, positive = NULL)
+precision <- MLmetrics::Precision(preds_factor,y_test)
+recall <- MLmetrics::Recall(preds_factor,y_test)
+f1 <- MLmetrics::F1_Score(preds_factor,y_test)
 
-specificity <- mean(conf$byClass[, "Specificity"], na.rm = TRUE)
+specificity <- mean(conf$byClass[,"Specificity"],na.rm=TRUE)
 
-compute_multiclass_mcc <- function(conf_matrix) {
+compute_multiclass_mcc <- function(conf_matrix){
   n <- sum(conf_matrix)
   rowsums <- rowSums(conf_matrix)
   colsums <- colSums(conf_matrix)
   diag_vals <- diag(conf_matrix)
   s <- sum(diag_vals)
-  p0 <- sum(rowsums * colsums)
-  numerator <- (n * s) - p0
-  denominator <- sqrt((n^2 - sum(colsums^2)) * (n^2 - sum(rowsums^2)))
-  if (denominator == 0) return(NA)
-  numerator / denominator
+  p0 <- sum(rowsums*colsums)
+  numerator <- (n*s)-p0
+  denominator <- sqrt((n^2-sum(colsums^2))*(n^2-sum(rowsums^2)))
+  if(denominator==0) return(NA)
+  numerator/denominator
 }
 
-conf_mat_table <- table(y_test, preds_factor)
+conf_mat_table <- table(y_test,preds_factor)
 mcc <- compute_multiclass_mcc(as.matrix(conf_mat_table))
 
 cat("Evaluation Metrics:\n")
-cat(sprintf("Accuracy       : %.4f\n", acc))
-cat(sprintf("Precision      : %.4f\n", precision))
-cat(sprintf("Recall         : %.4f\n", recall))
-cat(sprintf("F1 Score       : %.4f\n", f1))
-cat(sprintf("Cohen's Kappa  : %.4f\n", kappa))
-cat(sprintf("Specificity    : %.4f\n", specificity))
-cat(sprintf("MCC            : %.4f\n", mcc))
+cat(sprintf("Accuracy       : %.4f\n",acc))
+cat(sprintf("Precision      : %.4f\n",precision))
+cat(sprintf("Recall         : %.4f\n",recall))
+cat(sprintf("F1 Score       : %.4f\n",f1))
+cat(sprintf("Cohen's Kappa  : %.4f\n",kappa))
+cat(sprintf("Specificity    : %.4f\n",specificity))
+cat(sprintf("MCC            : %.4f\n",mcc))
 
-# Confusion Matrix
+performance <- rbind(
+  performance,
+  data.frame(
+    Model = "XGBoost",
+    Accuracy = acc * 100,
+    Precision = precision * 100,
+    Recall = recall * 100,
+    Specificity = specificity * 100,
+    F1_Score = f1 * 100,
+    Cohens_Kappa = kappa * 100,
+    MCC = mcc * 100
+  )
+)
 
-cm <- table(y_test, preds_factor)
+############ Confusion Matrix Plot
+
+cm <- table(y_test,preds_factor)
 
 cm_melted <- as.data.frame.table(cm)
 colnames(cm_melted) <- c("True","Predicted","Count")
@@ -551,136 +475,223 @@ ggplot(cm_melted,aes(Predicted,True,fill=Count))+
     axis.ticks=element_blank(),
     panel.border=element_rect(color="black",fill=NA),
     panel.grid=element_blank(),
-    legend.position="none"
+    legend.position="right"
   )
 
-############ B: Bagged Decision Trees
+############ ROC Curve – XGBoost
 
-train_df <- data.frame(X_train)
-train_df$Deposit.type <- y_train
+library(pROC)
 
-# Bayesian Optimization
-bagged_cv_bayes <- function(nbagg, cp, maxdepth){
+# Predict class probabilities
+prob_raw <- predict(final_model, dtest)
+
+prob_mat <- matrix(prob_raw,
+                   nrow = nrow(X_test),
+                   ncol = num_class)
+
+colnames(prob_mat) <- levels(y_train)
+
+# Compute one-vs-rest ROC curves
+roc_list <- list()
+auc_vals <- numeric(num_class)
+
+for (i in seq_len(num_class)) {
   
-  nbagg <- as.integer(nbagg)
-  maxdepth <- as.integer(maxdepth)
+  class_label <- levels(y_train)[i]
   
-  folds <- createFolds(train_df$Deposit.type, k = 5)
+  binary_truth <- ifelse(y_test == class_label, 1, 0)
   
-  accs <- sapply(folds, function(val_idx){
-    
-    model <- bagging(
-      Deposit.type ~ .,
-      data = train_df[-val_idx, ],
-      nbagg = nbagg,
-      control = rpart.control(cp = cp, maxdepth = maxdepth)
+  # Skip if only one class present
+  if(length(unique(binary_truth)) < 2) next
+  
+  roc_obj <- pROC::roc(binary_truth, prob_mat[, i])
+  
+  roc_list[[i]] <- roc_obj
+  auc_vals[i] <- pROC::auc(roc_obj)
+}
+
+# Combine ROC curves for plotting
+roc_df_list <- lapply(seq_along(roc_list), function(i) {
+  
+  data.frame(
+    Sensitivity = roc_list[[i]]$sensitivities,
+    Specificity = 1 - roc_list[[i]]$specificities,
+    Class = paste0(
+      levels(y_train)[i],
+      " (AUC = ",
+      sprintf("%.3f", auc_vals[i]),
+      ")"
     )
-    
-    preds <- predict(model, newdata = train_df[val_idx, ], type = "class")
-    
-    mean(preds == train_df$Deposit.type[val_idx])
-  })
-  
-  list(Score = mean(accs), Pred = 0)
-}
+  )
+})
 
-set.seed(123)
+roc_df <- do.call(rbind, roc_df_list)
 
-bayes_opt_result <- BayesianOptimization(
-  FUN = bagged_cv_bayes,
-  bounds = list(
-    nbagg = c(50L,150L),
-    cp = c(0.001,0.01),
-    maxdepth = c(5L,15L)
-  ),
-  init_points = 10,
-  n_iter = 20,
-  acq = "ucb",
-  kappa = 2.576
-)
+macro_auc <- mean(auc_vals)
+# average AUC
+macro_auc <- mean(auc_vals)
 
-best_nbagg <- as.integer(bayes_opt_result$Best_Par["nbagg"])
-best_cp <- bayes_opt_result$Best_Par["cp"]
-best_maxdepth <- as.integer(bayes_opt_result$Best_Par["maxdepth"])
+# ---- Rename classes to deposit names if needed ----
+# roc_df$Class <- gsub("Class_1", "Skarn", roc_df$Class)
+# roc_df$Class <- gsub("Class_2", "Porphyry", roc_df$Class)
+# ... etc.
 
-# Train Final Bagging Model
+# Color palette (matches the stacked bar chart)
+class_colors <- c("#E41A1C",
+                  "#377EB8",
+                  "#4DAF4A",
+                  "#984EA3",
+                  "#FF7F00")
+names(class_colors) <- unique(roc_df$Class)
 
-final_model <- bagging(
-  Deposit.type ~ .,
-  data = train_df,
-  nbagg = best_nbagg,
-  control = rpart.control(cp = best_cp, maxdepth = best_maxdepth)
-)
-
-# Predictions
-
-test_df <- data.frame(X_test)
-
-preds <- predict(final_model, newdata = test_df, type = "class")
-
-y_pred <- factor(preds, levels = levels(y_test))
-
-# Evaluation Metrics
-
-conf <- confusionMatrix(y_pred, y_test)
-
-acc <- as.numeric(conf$overall["Accuracy"])
-kappa <- as.numeric(conf$overall["Kappa"])
-
-precision <- Precision(y_pred = y_pred, y_true = y_test, positive = NULL)
-recall <- Recall(y_pred = y_pred, y_true = y_test, positive = NULL)
-f1 <- F1_Score(y_pred = y_pred, y_true = y_test, positive = NULL)
-
-specificity <- mean(conf$byClass[, "Specificity"], na.rm = TRUE)
-
-compute_multiclass_mcc <- function(conf_matrix) {
-  n <- sum(conf_matrix)
-  rowsums <- rowSums(conf_matrix)
-  colsums <- colSums(conf_matrix)
-  diag_vals <- diag(conf_matrix)
-  s <- sum(diag_vals)
-  p0 <- sum(rowsums * colsums)
-  numerator <- (n * s) - p0
-  denominator <- sqrt((n^2 - sum(colsums^2)) * (n^2 - sum(rowsums^2)))
-  if (denominator == 0) return(NA)
-  return(numerator / denominator)
-}
-
-conf_mat_table <- table(y_test, y_pred)
-mcc <- compute_multiclass_mcc(as.matrix(conf_mat_table))
-
-cat("Evaluation Metrics:\n")
-cat(sprintf("Accuracy       : %.4f\n", acc))
-cat(sprintf("Precision      : %.4f\n", precision))
-cat(sprintf("Recall         : %.4f\n", recall))
-cat(sprintf("F1 Score       : %.4f\n", f1))
-cat(sprintf("Cohen's Kappa  : %.4f\n", kappa))
-cat(sprintf("Specificity    : %.4f\n", specificity))
-cat(sprintf("MCC            : %.4f\n", mcc))
-
-# Confusion Matrix Plot
-
-conf_mat_table <- table(y_test, y_pred)
-
-cm_melted <- as.data.frame.table(conf_mat_table)
-colnames(cm_melted) <- c("True","Predicted","Count")
-
-ggplot(cm_melted,aes(Predicted,True,fill=Count))+
-  geom_tile(color="black")+
-  geom_text(aes(label=Count),size=3)+
-  scale_fill_gradient(low="white",high="steelblue")+
-  labs(title="Confusion Matrix – Bagged Trees")+
-  theme_minimal(base_size=9)+
+p_roc <- ggplot(roc_df, aes(x = Specificity, y = Sensitivity, color = Class)) +
+  geom_line(linewidth = 0.7) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed",
+              color = "grey50", linewidth = 0.4) +
+  scale_color_manual(values = class_colors) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2),
+                     expand = c(0.01, 0.01)) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2),
+                     expand = c(0.01, 0.01)) +
+  labs(
+    x     = "1 \u2013 Specificity (False Positive Rate)",
+    y     = "Sensitivity (True Positive Rate)",
+    title = "ROC Curves \u2013 XGBoost",
+    color = NULL
+  ) +
+  annotate("text", x = 0.55, y = 0.08, size = 2.8, color = "black",
+           label = paste0("average AUC = ", sprintf("%.3f", macro_auc))) +
+  coord_equal() +
+  theme_bw(base_size = 9, base_family = "sans") +
   theme(
-    axis.title=element_blank(),
-    axis.text=element_blank(),
-    axis.ticks=element_blank(),
-    panel.border=element_rect(color="black",fill=NA),
-    panel.grid=element_blank(),
-    legend.position="none"
+    plot.title         = element_text(hjust = 0.5, face = "bold", size = 10),
+    axis.title.x       = element_text(size = 8, color = "black",
+                                      margin = ggplot2::margin(t = 6)),
+    axis.title.y       = element_text(size = 8, color = "black",
+                                      margin = ggplot2::margin(r = 6)),
+    axis.text          = element_text(size = 7, color = "black"),
+    axis.ticks         = element_line(linewidth = 0.3, color = "black"),
+    axis.ticks.length  = unit(1.5, "pt"),
+    panel.grid.major   = element_line(linewidth = 0.15, color = "grey90"),
+    panel.grid.minor   = element_blank(),
+    panel.border       = element_rect(linewidth = 0.5, color = "black", fill = NA),
+    panel.background   = element_rect(fill = "white"),
+    plot.background    = element_rect(fill = "white", color = NA),
+    legend.position    = c(0.72, 0.28),
+    legend.background  = element_rect(fill = "white", color = "grey60", linewidth = 0.3),
+    legend.text        = element_text(size = 6.5),
+    legend.key.size    = unit(0.4, "cm"),
+    legend.key.width   = unit(0.6, "cm"),
+    legend.spacing.y   = unit(1, "pt"),
+    plot.margin        = ggplot2::margin(t = 8, r = 8, b = 8, l = 8, unit = "pt")
   )
 
-############ C: Adaboost
+print(p_roc)
+
+############ SHAP Beeswarm Plot
+
+library(shapviz)
+
+shp <- shapviz(final_model,
+               X_pred = X_train,
+               X = as.data.frame(X_train))
+
+p_bee <- sv_importance(
+  shp,
+  kind = "beeswarm",
+  max_display = 15,
+  size = 0.8,
+  alpha = 0.4
+) +
+  theme_classic(base_size = 9) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.text = element_text(color = "black"),
+    legend.position = "right"
+  )
+
+print(p_bee)
+
+############ SHAP Feature Importance by Class – Stacked Bar
+
+class_names <- names(shp)
+
+importance_list <- lapply(class_names, function(cls) {
+  
+  shap_mat <- shp[[cls]]$S
+  
+  data.frame(
+    Feature = colnames(shap_mat),
+    Mean_SHAP = colMeans(abs(shap_mat)),
+    Class = cls
+  )
+})
+
+importance_df <- do.call(rbind, importance_list)
+
+# Order features by overall importance
+feature_totals <- tapply(importance_df$Mean_SHAP,
+                         importance_df$Feature,
+                         sum)
+
+feature_order <- names(sort(feature_totals))
+
+importance_df$Feature <- factor(
+  importance_df$Feature,
+  levels = feature_order
+)
+
+# Keep top 12 features
+top_features <- tail(feature_order, 12)
+
+importance_df <- importance_df[
+  importance_df$Feature %in% top_features, ]
+
+############ SHAP Stacked Bar Plot
+
+p_bar <- ggplot(importance_df,
+                aes(x = Mean_SHAP,
+                    y = Feature,
+                    fill = Class)) +
+  
+  geom_bar(stat = "identity",
+           width = 0.65) +
+  
+  scale_fill_manual(
+    values = c("#E41A1C",
+               "#377EB8",
+               "#4DAF4A",
+               "#984EA3",
+               "#FF7F00")
+  ) +
+  
+  scale_x_continuous(expand = expansion(mult = c(0,0.05))) +
+  
+  labs(
+    x = "mean(|SHAP value|) (average impact on model output magnitude)",
+    y = NULL,
+    fill = NULL
+  ) +
+  
+  theme_bw(base_size = 8) +
+  
+  theme(
+    axis.text.y = element_text(size = 8,
+                               color = "black",
+                               face = "bold"),
+    axis.text.x = element_text(size = 7,
+                               color = "black"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_line(linewidth = 0.2,
+                                      color = "grey85"),
+    panel.border = element_rect(color = "black",
+                                fill = NA),
+    legend.position = c(0.82,0.22)
+  )
+
+print(p_bar)
+
+############ B: Adaboost ############
 
 train_df <- data.frame(X_train)
 train_df$Deposit.type <- y_train
@@ -711,6 +722,8 @@ adaboost_cv_bayes <- function(mfinal, maxdepth, cp){
   list(Score = mean(accs), Pred = 0)
 }
 
+# Bayesian Optimization
+
 set.seed(123)
 
 bayes_opt_result <- BayesianOptimization(
@@ -721,17 +734,20 @@ bayes_opt_result <- BayesianOptimization(
     cp = c(0.001,0.01)
   ),
   init_points = 10,
-  n_iter = 20,
+  n_iter = 10,
   acq = "ucb",
   kappa = 2.576,
+  eps = 0.01,
   verbose = TRUE
 )
 
-best_mfinal <- floor(bayes_opt_result$Best_Par["mfinal"])
-best_maxdepth <- floor(bayes_opt_result$Best_Par["maxdepth"])
-best_cp <- bayes_opt_result$Best_Par["cp"]
+# Best Parameters
 
-# Train Final AdaBoost Model
+best_mfinal <- floor(bayes_opt_result$Best_Par[["mfinal"]])
+best_maxdepth <- floor(bayes_opt_result$Best_Par[["maxdepth"]])
+best_cp <- bayes_opt_result$Best_Par[["cp"]]
+
+# Train Final Model
 
 final_model <- boosting(
   Deposit.type ~ .,
@@ -740,7 +756,7 @@ final_model <- boosting(
   control = rpart.control(maxdepth = best_maxdepth, cp = best_cp)
 )
 
-# Predictions on Test Set
+# Predictions
 
 test_df <- data.frame(X_test)
 
@@ -755,26 +771,22 @@ conf <- confusionMatrix(y_pred, y_test)
 acc <- as.numeric(conf$overall["Accuracy"])
 kappa <- as.numeric(conf$overall["Kappa"])
 
-f1 <- F1_Score(y_pred = y_pred, y_true = y_test, positive = NULL)
-precision <- Precision(y_pred = y_pred, y_true = y_test, positive = NULL)
-recall <- Recall(y_pred = y_pred, y_true = y_test, positive = NULL)
+f1 <- F1_Score(y_pred = y_pred, y_true = y_test)
+precision <- Precision(y_pred = y_pred, y_true = y_test)
+recall <- Recall(y_pred = y_pred, y_true = y_test)
 
 specificity <- mean(conf$byClass[,"Specificity"], na.rm = TRUE)
 
-
-# MCC calculation
+# MCC
 
 compute_multiclass_mcc <- function(conf_matrix){
   
   n <- sum(conf_matrix)
-  
   rowsums <- rowSums(conf_matrix)
   colsums <- colSums(conf_matrix)
-  
   diag_vals <- diag(conf_matrix)
   
   s <- sum(diag_vals)
-  
   p0 <- sum(rowsums * colsums)
   
   numerator <- (n*s) - p0
@@ -790,7 +802,6 @@ conf_mat_table <- table(y_test, y_pred)
 
 mcc <- compute_multiclass_mcc(as.matrix(conf_mat_table))
 
-
 cat("\nEvaluation Metrics\n")
 
 cat(sprintf("Accuracy      : %.4f\n", acc))
@@ -800,6 +811,20 @@ cat(sprintf("F1 Score      : %.4f\n", f1))
 cat(sprintf("Cohen Kappa   : %.4f\n", kappa))
 cat(sprintf("Specificity   : %.4f\n", specificity))
 cat(sprintf("MCC           : %.4f\n", mcc))
+
+performance <- rbind(
+  performance,
+  data.frame(
+    Model = "AdaBoost",
+    Accuracy = acc * 100,
+    Precision = precision * 100,
+    Recall = recall * 100,
+    Specificity = specificity * 100,
+    F1_Score = f1 * 100,
+    Cohens_Kappa = kappa * 100,
+    MCC = mcc * 100
+  )
+)
 
 # Confusion Matrix
 
@@ -822,132 +847,98 @@ ggplot(cm_melted, aes(Predicted,True,fill=Count))+
     legend.position = "none"
   )
 
-############ D: SVM
+############ ROC Curve – AdaBoost
 
-# Bayesian Optimization for SVM
+library(pROC)
 
-svm_cv_bayes <- function(cost, gamma){
+# Predict class probabilities
+prob_mat <- preds$prob
+
+prob_mat <- as.matrix(prob_mat)
+
+colnames(prob_mat) <- levels(y_train)
+
+roc_list <- list()
+auc_vals <- c()
+
+for(i in 1:num_class){
   
-  cost <- 2^cost
-  gamma <- 2^gamma
+  class_label <- levels(y_train)[i]
   
-  folds <- createFolds(y_train, k = 5)
+  binary_truth <- ifelse(y_test == class_label,1,0)
   
-  accs <- sapply(folds, function(val_idx){
-    
-    model <- svm(
-      x = X_train[-val_idx, ],
-      y = y_train[-val_idx],
-      cost = cost,
-      gamma = gamma,
-      kernel = "radial"
-    )
-    
-    preds <- predict(model, X_train[val_idx, ])
-    
-    mean(preds == y_train[val_idx])
-  })
+  if(length(unique(binary_truth)) < 2) next
   
-  list(Score = mean(accs), Pred = 0)
-}
-
-set.seed(123)
-
-bayes_opt_result <- BayesianOptimization(
-  FUN = svm_cv_bayes,
-  bounds = list(
-    cost = c(-5,15),
-    gamma = c(-15,3)
-  ),
-  init_points = 10,
-  n_iter = 20,
-  acq = "ucb",
-  kappa = 2.576
-)
-
-best_cost <- 2^bayes_opt_result$Best_Par["cost"]
-best_gamma <- 2^bayes_opt_result$Best_Par["gamma"]
-
-cat("Best Hyperparameters:\n")
-cat("cost =", best_cost,"\n")
-cat("gamma =", best_gamma,"\n")
-
-# Train Final SVM Model
-svm_model <- svm(
-  x = X_train,
-  y = y_train,
-  cost = best_cost,
-  gamma = best_gamma,
-  kernel = "radial"
-)
-
-# Predictions
-
-preds <- predict(svm_model, X_test)
-
-y_pred <- factor(preds, levels = levels(y_test))
-
-# Evaluation Metrics
-
-conf <- caret::confusionMatrix(y_pred, y_test)
-
-acc <- as.numeric(conf$overall["Accuracy"])
-kappa <- as.numeric(conf$overall["Kappa"])
-
-precision <- MLmetrics::Precision(y_pred = y_pred, y_true = y_test, positive = NULL)
-recall <- MLmetrics::Recall(y_pred = y_pred, y_true = y_test, positive = NULL)
-f1 <- MLmetrics::F1_Score(y_pred = y_pred, y_true = y_test, positive = NULL)
-
-specificity <- mean(conf$byClass[, "Specificity"], na.rm = TRUE)
-
-compute_multiclass_mcc <- function(conf_matrix) {
-  n <- sum(conf_matrix)
-  rowsums <- rowSums(conf_matrix)
-  colsums <- colSums(conf_matrix)
-  diag_vals <- diag(conf_matrix)
-  s <- sum(diag_vals)
-  p0 <- sum(rowsums * colsums)
-  numerator <- (n * s) - p0
-  denominator <- sqrt((n^2 - sum(colsums^2)) * (n^2 - sum(rowsums^2)))
-  if (denominator == 0) return(NA)
-  numerator / denominator
-}
-
-conf_mat_table <- table(y_test, y_pred)
-mcc <- compute_multiclass_mcc(as.matrix(conf_mat_table))
-
-cat("Evaluation Metrics:\n")
-cat(sprintf("Accuracy       : %.4f\n", acc))
-cat(sprintf("Precision      : %.4f\n", precision))
-cat(sprintf("Recall         : %.4f\n", recall))
-cat(sprintf("F1 Score       : %.4f\n", f1))
-cat(sprintf("Cohen's Kappa  : %.4f\n", kappa))
-cat(sprintf("Specificity    : %.4f\n", specificity))
-cat(sprintf("MCC            : %.4f\n", mcc))
-
-# Confusion Matrix
-
-conf_mat_table <- table(y_test, y_pred)
-
-cm_melted <- as.data.frame.table(conf_mat_table)
-colnames(cm_melted) <- c("True","Predicted","Count")
-
-ggplot(cm_melted,aes(Predicted,True,fill=Count))+
-  geom_tile(color="black")+
-  geom_text(aes(label=Count),size=3)+
-  scale_fill_gradient(low="white",high="steelblue")+
-  labs(title="Confusion Matrix – SVM")+
-  theme_minimal(base_size=9)+
-  theme(
-    axis.title=element_blank(),
-    axis.text=element_blank(),
-    axis.ticks=element_blank(),
-    panel.border=element_rect(color="black",fill=NA),
-    panel.grid=element_blank(),
-    legend.position="none"
+  roc_obj <- pROC::roc(
+    response = binary_truth,
+    predictor = prob_mat[,i],
+    quiet = TRUE
   )
+  
+  roc_list[[class_label]] <- roc_obj
+  auc_vals[class_label] <- pROC::auc(roc_obj)
+}
 
-############ E: Random Forest
+############ Convert ROC data
+
+roc_df_list <- lapply(names(roc_list), function(cls){
+  
+  roc_obj <- roc_list[[cls]]
+  
+  data.frame(
+    Sensitivity = roc_obj$sensitivities,
+    Specificity = 1 - roc_obj$specificities,
+    Class = paste0(cls,
+                   " (AUC=",
+                   sprintf("%.3f", auc_vals[cls]),
+                   ")")
+  )
+})
+
+roc_df <- do.call(rbind, roc_df_list)
+
+macro_auc <- mean(auc_vals)
+
+############ Plot ROC
+
+p_roc_ada <- ggplot(roc_df,
+                    aes(Specificity,Sensitivity,color=Class))+
+  
+  geom_line(linewidth=0.8)+
+  
+  geom_abline(intercept=0,
+              slope=1,
+              linetype="dashed",
+              color="grey50")+
+  
+  scale_color_manual(values=c(
+    "#E41A1C",
+    "#377EB8",
+    "#4DAF4A",
+    "#984EA3",
+    "#FF7F00"
+  ))+
+  
+  coord_equal()+
+  
+  labs(
+    title="ROC Curves – AdaBoost",
+    x="1 − Specificity (False Positive Rate)",
+    y="Sensitivity (True Positive Rate)"
+  )+
+  
+  annotate("text",
+           x=0.55,
+           y=0.08,
+           label=paste0("Average AUC = ",
+                        sprintf("%.3f",macro_auc)),
+           size=3)+
+  
+  theme_bw(base_size=9)
+
+print(p_roc_ada)
+
+############ C: Random Forest ############
 
 # Bayesian Optimization for RF
 
@@ -1034,7 +1025,33 @@ f1 <- F1_Score(y_pred = y_pred, y_true = y_test)
 
 specificity <- mean(conf$byClass[,"Specificity"], na.rm = TRUE)
 
+############ MCC calculation
+
+compute_multiclass_mcc <- function(conf_matrix){
+  
+  n <- sum(conf_matrix)
+  
+  rowsums <- rowSums(conf_matrix)
+  colsums <- colSums(conf_matrix)
+  
+  diag_vals <- diag(conf_matrix)
+  
+  s <- sum(diag_vals)
+  
+  p0 <- sum(rowsums * colsums)
+  
+  numerator <- (n*s) - p0
+  
+  denominator <- sqrt((n^2 - sum(colsums^2)) *
+                        (n^2 - sum(rowsums^2)))
+  
+  if(denominator == 0) return(NA)
+  
+  numerator / denominator
+}
+
 conf_mat_table <- table(y_test, y_pred)
+
 mcc <- compute_multiclass_mcc(as.matrix(conf_mat_table))
 
 cat("\nEvaluation Metrics – Random Forest\n")
@@ -1045,6 +1062,20 @@ cat(sprintf("F1 Score       : %.4f\n", f1))
 cat(sprintf("Cohen's Kappa  : %.4f\n", kappa))
 cat(sprintf("Specificity    : %.4f\n", specificity))
 cat(sprintf("MCC            : %.4f\n", mcc))
+
+performance <- rbind(
+  performance,
+  data.frame(
+    Model = "Random Forest",
+    Accuracy = acc * 100,
+    Precision = precision * 100,
+    Recall = recall * 100,
+    Specificity = specificity * 100,
+    F1_Score = f1 * 100,
+    Cohens_Kappa = kappa * 100,
+    MCC = mcc * 100
+  )
+)
 
 # Confusion Matrix Plot
 
@@ -1066,666 +1097,130 @@ ggplot(cm_melted,aes(Predicted,True,fill=Count))+
     legend.position="none"
   )
 
-############ F: MLP
+############ ROC Curve – Random Forest
 
-# Bayesian Optimization for MLP
+# Predict probabilities
+rf_prob <- predict(rf_model, X_test, type = "prob")
 
-mlp_cv_bayes <- function(size, decay) {
+# Ensure matrix format
+prob_mat <- as.matrix(rf_prob)
+
+# Ensure columns match class labels
+colnames(prob_mat) <- levels(y_train)
+
+roc_list <- list()
+auc_vals <- c()
+
+for (i in 1:num_class) {
   
-  size <- round(size)
-  decay <- 10^decay
+  class_label <- levels(y_train)[i]
   
-  folds <- createFolds(y_train, k = 5)
+  binary_truth <- ifelse(y_test == class_label, 1, 0)
   
-  accs <- sapply(folds, function(val_idx){
-    
-    model <- nnet(
-      X_train[-val_idx, ],
-      class.ind(y_train[-val_idx]),
-      size = size,
-      decay = decay,
-      maxit = 500,
-      trace = FALSE,
-      linout = FALSE,
-      softmax = TRUE
-    )
-    
-    preds <- predict(model, X_train[val_idx, ], type = "class")
-    
-    mean(preds == y_train[val_idx])
-  })
+  # Skip if only one class present
+  if(length(unique(binary_truth)) < 2) next
   
-  list(Score = mean(accs), Pred = 0)
-}
-
-set.seed(123)
-
-bayes_opt_result <- BayesianOptimization(
-  FUN = mlp_cv_bayes,
-  bounds = list(
-    size = c(1,20),
-    decay = c(-6,-1)
-  ),
-  init_points = 10,
-  n_iter = 20,
-  acq = "ucb",
-  kappa = 2.576
-)
-
-best_size <- round(bayes_opt_result$Best_Par["size"])
-best_decay <- 10^bayes_opt_result$Best_Par["decay"]
-
-cat("Best MLP Hyperparameters:\n")
-cat("size =", best_size,"\n")
-cat("decay =", best_decay,"\n")
-
-
-# Train Final MLP Model
-
-mlp_model <- nnet(
-  X_train,
-  class.ind(y_train),
-  size = best_size,
-  decay = best_decay,
-  maxit = 500,
-  trace = FALSE,
-  linout = FALSE,
-  softmax = TRUE
-)
-
-# Predictions
-pred_probs <- predict(mlp_model, X_test, type = "raw")
-
-preds <- factor(
-  colnames(pred_probs)[apply(pred_probs,1,which.max)],
-  levels = levels(y_train)
-)
-
-# Evaluation Metrics
-
-conf <- confusionMatrix(preds, y_test)
-
-acc <- as.numeric(conf$overall["Accuracy"])
-kappa <- as.numeric(conf$overall["Kappa"])
-
-precision <- Precision(y_pred = preds, y_true = y_test)
-recall <- Recall(y_pred = preds, y_true = y_test)
-f1 <- F1_Score(y_pred = preds, y_true = y_test)
-
-specificity <- mean(conf$byClass[,"Specificity"], na.rm = TRUE)
-
-conf_mat_table <- table(y_test, preds)
-mcc <- compute_multiclass_mcc(as.matrix(conf_mat_table))
-
-cat("\nEvaluation Metrics – MLP\n")
-
-cat(sprintf("Accuracy       : %.4f\n", acc))
-cat(sprintf("Precision      : %.4f\n", precision))
-cat(sprintf("Recall         : %.4f\n", recall))
-cat(sprintf("F1 Score       : %.4f\n", f1))
-cat(sprintf("Cohen's Kappa  : %.4f\n", kappa))
-cat(sprintf("Specificity    : %.4f\n", specificity))
-cat(sprintf("MCC            : %.4f\n", mcc))
-
-
-# Confusion Matrix Plot
-
-cm_melted <- as.data.frame.table(conf_mat_table)
-colnames(cm_melted) <- c("True","Predicted","Count")
-
-ggplot(cm_melted,aes(Predicted,True,fill=Count))+
-  geom_tile(color="black")+
-  geom_text(aes(label=Count),size=3)+
-  scale_fill_gradient(low="white",high="steelblue")+
-  labs(title="Confusion Matrix – MLP")+
-  theme_minimal(base_size=9)+
-  theme(
-    axis.title=element_blank(),
-    axis.text=element_blank(),
-    axis.ticks=element_blank(),
-    panel.border=element_rect(color="black",fill=NA),
-    panel.grid=element_blank(),
-    legend.position="none"
-  )
-
-############ G: Naive Bayes
-
-# Bayesian Optimization for Naive Bayes
-
-nb_cv_bayes <- function(laplace) {
-  
-  folds <- createFolds(y_train, k = 5, returnTrain = TRUE)
-  
-  accs <- sapply(folds, function(train_idx_fold){
-    
-    model <- naiveBayes(
-      x = X_train[train_idx_fold, ],
-      y = y_train[train_idx_fold],
-      laplace = laplace
-    )
-    
-    preds <- predict(model, X_train[-train_idx_fold, ])
-    
-    mean(preds == y_train[-train_idx_fold])
-  })
-  
-  list(Score = mean(accs), Pred = 0)
-}
-
-set.seed(123)
-
-bayes_opt_result <- BayesianOptimization(
-  FUN = nb_cv_bayes,
-  bounds = list(
-    laplace = c(0,5)
-  ),
-  init_points = 10,
-  n_iter = 20,
-  acq = "ucb",
-  kappa = 2.576
-)
-
-best_laplace <- bayes_opt_result$Best_Par["laplace"]
-
-cat("Best Naive Bayes Hyperparameter:\n")
-cat("laplace =", best_laplace,"\n")
-
-
-# Train Final Naive Bayes Model
-
-nb_model <- naiveBayes(
-  x = X_train,
-  y = y_train,
-  laplace = best_laplace
-)
-
-
-# Predictions
-
-preds <- predict(nb_model, X_test)
-
-y_pred <- factor(preds, levels = levels(y_test))
-
-
-# Evaluation Metrics
-
-conf <- confusionMatrix(y_pred, y_test)
-
-acc <- as.numeric(conf$overall["Accuracy"])
-kappa <- as.numeric(conf$overall["Kappa"])
-
-precision <- Precision(y_pred = y_pred, y_true = y_test)
-recall <- Recall(y_pred = y_pred, y_true = y_test)
-f1 <- F1_Score(y_pred = y_pred, y_true = y_test)
-
-specificity <- mean(conf$byClass[,"Specificity"], na.rm = TRUE)
-
-
-conf_mat_table <- table(y_test, y_pred)
-mcc <- compute_multiclass_mcc(as.matrix(conf_mat_table))
-
-
-cat("\nEvaluation Metrics – Naive Bayes\n")
-
-cat(sprintf("Accuracy       : %.4f\n", acc))
-cat(sprintf("Precision      : %.4f\n", precision))
-cat(sprintf("Recall         : %.4f\n", recall))
-cat(sprintf("F1 Score       : %.4f\n", f1))
-cat(sprintf("Cohen's Kappa  : %.4f\n", kappa))
-cat(sprintf("Specificity    : %.4f\n", specificity))
-cat(sprintf("MCC            : %.4f\n", mcc))
-
-
-# Confusion Matrix Plot
-
-cm_melted <- as.data.frame.table(conf_mat_table)
-colnames(cm_melted) <- c("True","Predicted","Count")
-
-ggplot(cm_melted,aes(Predicted,True,fill=Count))+
-  geom_tile(color="black")+
-  geom_text(aes(label=Count),size=3)+
-  scale_fill_gradient(low="white",high="steelblue")+
-  labs(title="Confusion Matrix – Naive Bayes")+
-  theme_minimal(base_size=9)+
-  theme(
-    axis.title=element_blank(),
-    axis.text=element_blank(),
-    axis.ticks=element_blank(),
-    panel.border=element_rect(color="black",fill=NA),
-    panel.grid=element_blank(),
-    legend.position="none"
-  )
-
-############ H: Stacking
-
-# Hyperparameter tuning results already obtained earlier
-
-best_rf_mtry <- best_mtry
-best_rf_nodesize <- best_nodesize
-best_rf_maxnodes <- best_maxnodes
-
-best_eta <- best["eta"]
-best_max_depth <- best["max_depth"]
-best_subsample <- best["subsample"]
-best_colsample <- best["colsample_bytree"]
-
-folds <- createFolds(y_train, k = 5)
-
-rf_meta <- matrix(NA, nrow = length(y_train), ncol = length(levels(y_train)))
-xgb_meta <- matrix(NA, nrow = length(y_train), ncol = length(levels(y_train)))
-
-colnames(rf_meta) <- paste0("RF_", levels(y_train))
-colnames(xgb_meta) <- paste0("XGB_", levels(y_train))
-
-for(i in seq_along(folds)){
-  
-  val_idx <- folds[[i]]
-  tr_idx <- setdiff(1:length(y_train), val_idx)
-  
-  rf_fold <- randomForest(
-    x = X_train[tr_idx,],
-    y = y_train[tr_idx],
-    mtry = best_rf_mtry,
-    ntree = 500,
-    nodesize = best_rf_nodesize,
-    maxnodes = best_rf_maxnodes
+  roc_obj <- pROC::roc(
+    response = binary_truth,
+    predictor = prob_mat[,i],
+    quiet = TRUE
   )
   
-  rf_meta[val_idx,] <- predict(rf_fold, X_train[val_idx,], type="prob")
+  roc_list[[class_label]] <- roc_obj
+  auc_vals[class_label] <- pROC::auc(roc_obj)
+}
+
+roc_df_list <- lapply(names(roc_list), function(cls){
   
-  xgb_fold <- xgboost(
-    data = xgb.DMatrix(X_train[tr_idx,], label = as.integer(y_train[tr_idx]) - 1),
-    objective = "multi:softprob",
-    num_class = num_class,
-    eta = best_eta,
-    max_depth = as.integer(best_max_depth),
-    subsample = best_subsample,
-    colsample_bytree = best_colsample,
-    nrounds = 100,
-    verbose = 0
+  roc_obj <- roc_list[[cls]]
+  
+  data.frame(
+    Sensitivity = roc_obj$sensitivities,
+    Specificity = 1 - roc_obj$specificities,
+    Class = paste0(cls,
+                   " (AUC=",
+                   sprintf("%.3f", auc_vals[cls]),
+                   ")")
   )
+})
+
+roc_df <- do.call(rbind, roc_df_list)
+
+macro_auc <- mean(auc_vals)
+
+############ Plot
+
+p_roc_rf <- ggplot(roc_df,
+                   aes(Specificity,Sensitivity,color=Class))+
   
-  preds <- predict(xgb_fold, xgb.DMatrix(X_train[val_idx,]))
-  xgb_meta[val_idx,] <- matrix(preds, ncol = num_class, byrow = TRUE)
-}
+  geom_line(linewidth=0.8)+
+  
+  geom_abline(intercept=0,
+              slope=1,
+              linetype="dashed",
+              color="grey50")+
+  
+  scale_color_manual(values=c(
+    "#E41A1C",
+    "#377EB8",
+    "#4DAF4A",
+    "#984EA3",
+    "#FF7F00"
+  ))+
+  
+  coord_equal()+
+  
+  labs(
+    title="ROC Curves – Random Forest",
+    x="1 − Specificity (False Positive Rate)",
+    y="Sensitivity (True Positive Rate)"
+  )+
+  
+  annotate("text",
+           x=0.55,
+           y=0.08,
+           label=paste0("Average AUC = ",
+                        sprintf("%.3f",macro_auc)),
+           size=3)+
+  
+  theme_bw(base_size=9)
 
-meta_train <- data.frame(rf_meta, xgb_meta)
-meta_train$Deposit.type <- y_train
+print(p_roc_rf)
 
-# Train meta-model
+############ Radar Plots for Model Performance  ############
 
-meta_model <- multinom(Deposit.type ~ ., data = meta_train, trace = FALSE)
+print(performance)
 
-# Train final base models
-
-rf_final <- randomForest(
-  x = X_train,
-  y = y_train,
-  mtry = best_rf_mtry,
-  ntree = 500,
-  nodesize = best_rf_nodesize,
-  maxnodes = best_rf_maxnodes
+max_min <- data.frame(
+  Accuracy = c(100,60),
+  Precision = c(100,60),
+  Recall = c(100,60),
+  Specificity = c(100,60),
+  F1_Score = c(100,60),
+  Cohens_Kappa = c(100,60),
+  MCC = c(100,60)
 )
 
-xgb_final <- xgboost(
-  data = xgb.DMatrix(X_train, label = as.integer(y_train)-1),
-  objective = "multi:softprob",
-  num_class = num_class,
-  eta = best_eta,
-  max_depth = as.integer(best_max_depth),
-  subsample = best_subsample,
-  colsample_bytree = best_colsample,
-  nrounds = 100,
-  verbose = 0
-)
+par(mfrow = c(2,2), mar = c(2,2,3,2))
 
-# Generate meta test features
-
-rf_test <- predict(rf_final, X_test, type="prob")
-
-xgb_test <- predict(xgb_final, xgb.DMatrix(X_test))
-xgb_test <- matrix(xgb_test, ncol = num_class, byrow = TRUE)
-
-colnames(rf_test) <- paste0("RF_", levels(y_train))
-colnames(xgb_test) <- paste0("XGB_", levels(y_train))
-
-meta_test <- data.frame(rf_test, xgb_test)
-
-final_preds <- predict(meta_model, meta_test)
-
-# Evaluate
-
-conf <- confusionMatrix(final_preds, y_test)
-
-acc <- as.numeric(conf$overall["Accuracy"])
-kappa <- as.numeric(conf$overall["Kappa"])
-
-f1 <- F1_Score(final_preds, y_test, positive = NULL)
-precision <- Precision(final_preds, y_test, positive = NULL)
-recall <- Recall(final_preds, y_test, positive = NULL)
-
-specificity <- mean(conf$byClass[, "Specificity"], na.rm = TRUE)
-
-compute_multiclass_mcc <- function(conf_matrix) {
+for(i in 1:nrow(performance)){
   
-  n <- sum(conf_matrix)
-  rowsums <- rowSums(conf_matrix)
-  colsums <- colSums(conf_matrix)
-  diag_vals <- diag(conf_matrix)
+  model_data <- rbind(max_min, performance[i,-1])
   
-  s <- sum(diag_vals)
+  rownames(model_data) <- c("Max","Min",performance$Model[i])
   
-  p0 <- sum(rowsums * colsums)
-  
-  numerator <- (n * s) - p0
-  denominator <- sqrt((n^2 - sum(colsums^2)) * (n^2 - sum(rowsums^2)))
-  
-  if (denominator == 0) return(NA)
-  
-  return(numerator / denominator)
-}
-
-mcc <- compute_multiclass_mcc(as.matrix(table(y_test, final_preds)))
-
-cat("Evaluation Metrics:\n")
-cat(sprintf("Accuracy       : %.4f\n", acc))
-cat(sprintf("Precision      : %.4f\n", precision))
-cat(sprintf("Recall         : %.4f\n", recall))
-cat(sprintf("F1 Score       : %.4f\n", f1))
-cat(sprintf("Cohen's Kappa  : %.4f\n", kappa))
-cat(sprintf("Specificity    : %.4f\n", specificity))
-cat(sprintf("MCC            : %.4f\n", mcc))
-
-# Confusion Matrix Plot
-
-cm <- table(True = y_test, Predicted = final_preds)
-
-cm_melted <- as.data.frame(cm)
-colnames(cm_melted) <- c("True", "Predicted", "Count")
-
-ggplot(cm_melted, aes(x = Predicted, y = True, fill = Count)) +
-  geom_tile(color = "black", linewidth = 0.5) +
-  geom_text(aes(label = Count), color = "black", size = 3) +
-  scale_fill_gradient(low = "white", high = "steelblue") +
-  labs(title="Confusion Matrix – Stacking")+
-  theme_minimal(base_size = 9) +
-  theme(
-    axis.title.x = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    axis.ticks = element_blank(),
-    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
-    panel.grid = element_blank(),
-    legend.position = "none"
+  radarchart(
+    model_data,
+    axistype = 1,
+    pcol = rgb(0.2,0.5,0.9,0.9),
+    pfcol = rgb(0.2,0.5,0.9,0.25),
+    plwd = 2,
+    plty = 1,
+    cglcol = "grey70",
+    cglty = 1,
+    axislabcol = "grey30",
+    caxislabels = seq(60,100,10),
+    vlcex = 0.8,
+    title = performance$Model[i]
   )
-
-############ Part 5: Prediction of Blind Data ############
-
-#Reload original dataset (NA rows were removed earlier)
-data_original <- read.csv("SPHALERITE_CHEMISTRY2025.csv")
-
-#Extract blind deposits
-blind_data <- data_original[is.na(data_original$Deposit.type), ]
-
-
-############ Color palette
-
-deposit_colors <- c(
-  "Epithermal" = "#F8766D",
-  "MVT"        = "#A5A500",
-  "SEDEX"      = "#00BE7D",
-  "Skarn"      = "#00BFFF",
-  "VMS"        = "#F876DF"
-)
-
-
-############ Train final models
-
-### XGBoost
-xgb_model <- xgboost(
-  data = xgb.DMatrix(X_train, label = as.integer(y_train)-1),
-  objective = "multi:softprob",
-  num_class = length(levels(y_train)),
-  nrounds = 30,
-  eta = 0.182,
-  max_depth = 5,
-  subsample = 0.549,
-  colsample_bytree = 0.937,
-  verbose = 0
-)
-
-### AdaBoost
-ada_model <- boosting(
-  Deposit.type ~ .,
-  data = data.frame(X_train, Deposit.type = y_train),
-  mfinal = 150,
-  control = rpart.control(cp = 0.001, maxdepth = 11)
-)
-
-### SVM
-svm_model <- svm(
-  x = X_train,
-  y = y_train,
-  kernel = "radial",
-  cost = 13.06,
-  gamma = 2^(-1.628),
-  probability = TRUE
-)
-
-### MLP
-mlp_model <- nnet(
-  X_train,
-  class.ind(y_train),
-  size = 20,
-  decay = 10^(-1.01),
-  maxit = 500,
-  trace = FALSE,
-  softmax = TRUE
-)
-
-### Random Forest (for stacking)
-rf_model <- randomForest(
-  x = X_train,
-  y = y_train,
-  ntree = 500,
-  mtry = 4,
-  nodesize = 1,
-  maxnodes = 441
-)
-
-
-############ Train stacking meta-model
-
-rf_prob <- predict(rf_model, X_train, type="prob")
-
-xgb_prob <- predict(xgb_model, xgb.DMatrix(X_train))
-xgb_prob <- matrix(xgb_prob, ncol=num_class, byrow=TRUE)
-
-colnames(rf_prob) <- paste0("RF_", levels(y_train))
-colnames(xgb_prob) <- paste0("XGB_", levels(y_train))
-
-meta_train <- data.frame(rf_prob, xgb_prob)
-meta_train$Deposit.type <- y_train
-
-meta_model <- nnet::multinom(Deposit.type ~ ., data=meta_train, trace=FALSE)
-
-
-############ Preprocess blind samples
-
-prepare_blind <- function(deposit_name){
-  
-  deposit_data <- blind_data[blind_data$Deposit == deposit_name, ]
-  
-  features_raw <- deposit_data[,4:15]
-  
-  min_positive <- min(features_raw[features_raw > 0], na.rm = TRUE)
-  features_raw[features_raw <= 0] <- min_positive / 2
-  
-  features_clr <- clr_transform(features_raw)
-  
-  features_scaled <- scale(
-    features_clr,
-    center = attr(features_scaled_ml,"scaled:center"),
-    scale  = attr(features_scaled_ml,"scaled:scale")
-  )
-  
-  return(features_scaled)
 }
-
-
-############ Pie chart function
-
-plot_pie <- function(preds){
-  
-  pie_data <- data.frame(table(preds))
-  colnames(pie_data) <- c("Type","Count")
-  
-  ggplot(pie_data, aes(x="", y=Count, fill=Type)) +
-    geom_bar(stat="identity", width=1) +
-    coord_polar("y") +
-    scale_fill_manual(values = deposit_colors) +
-    theme_void() +
-    theme(legend.position="none")
-}
-
-
-############ Prediction functions
-
-predict_stack <- function(dep){
-  
-  X <- prepare_blind(dep)
-  
-  rf_pred <- predict(rf_model, X, type="prob")
-  
-  xgb_pred <- predict(xgb_model, xgb.DMatrix(X))
-  xgb_pred <- matrix(xgb_pred, ncol=num_class, byrow=TRUE)
-  
-  colnames(rf_pred) <- paste0("RF_", levels(y_train))
-  colnames(xgb_pred) <- paste0("XGB_", levels(y_train))
-  
-  meta_test <- data.frame(rf_pred, xgb_pred)
-  
-  preds <- predict(meta_model, meta_test)
-  
-  plot_pie(preds)
-}
-
-
-predict_xgb <- function(dep){
-  
-  X <- prepare_blind(dep)
-  
-  probs <- predict(xgb_model, xgb.DMatrix(X))
-  probs <- matrix(probs, ncol=num_class, byrow=TRUE)
-  
-  preds <- factor(max.col(probs),
-                  levels=1:num_class,
-                  labels=levels(y_train))
-  
-  plot_pie(preds)
-}
-
-
-predict_adaboost <- function(dep){
-  
-  X <- prepare_blind(dep)
-  
-  preds <- predict.boosting(ada_model, newdata=data.frame(X))
-  
-  pred_labels <- factor(preds$class, levels=levels(y_train))
-  
-  plot_pie(pred_labels)
-}
-
-
-predict_svm <- function(dep){
-  
-  X <- prepare_blind(dep)
-  
-  preds <- predict(svm_model, X)
-  
-  plot_pie(preds)
-}
-
-
-predict_mlp <- function(dep){
-  
-  X <- prepare_blind(dep)
-  
-  probs <- predict(mlp_model, X, type="raw")
-  
-  preds <- factor(
-    colnames(probs)[apply(probs,1,which.max)],
-    levels=levels(y_train)
-  )
-  
-  plot_pie(preds)
-}
-
-
-############ Generate panel figure
-
-library(patchwork)
-library(grid)
-library(cowplot)
-
-deposits <- c("Beishan","Zawarmala","Xulaojiugou")
-
-stack_plots <- lapply(deposits,predict_stack)
-xgb_plots   <- lapply(deposits,predict_xgb)
-ada_plots   <- lapply(deposits,predict_adaboost)
-svm_plots   <- lapply(deposits,predict_svm)
-mlp_plots   <- lapply(deposits,predict_mlp)
-
-
-############ Arrange rows
-
-row1 <- stack_plots[[1]] + stack_plots[[2]] + stack_plots[[3]]
-row2 <- xgb_plots[[1]]   + xgb_plots[[2]]   + xgb_plots[[3]]
-row3 <- ada_plots[[1]]   + ada_plots[[2]]   + ada_plots[[3]]
-row4 <- svm_plots[[1]]   + svm_plots[[2]]   + svm_plots[[3]]
-row5 <- mlp_plots[[1]]   + mlp_plots[[2]]   + mlp_plots[[3]]
-
-panel <- row1 / row2 / row3 / row4 / row5
-
-
-############ Create legend
-
-legend_plot <- ggplot(data.frame(Type=names(deposit_colors)),
-                      aes(x=Type,y=1,fill=Type))+
-  geom_bar(stat="identity")+
-  scale_fill_manual(values=deposit_colors)+
-  theme_void()+
-  theme(legend.position="right")
-
-legend <- cowplot::get_legend(legend_plot)
-
-
-############ Combine panel and legend
-
-final_plot <- cowplot::plot_grid(
-  panel,
-  legend,
-  ncol=2,
-  rel_widths=c(4,1)
-)
-
-print(final_plot)
-
-
-############ Add row labels
-
-grid.text("a. Stacking", x=0.02, y=0.92, just="left", gp=gpar(fontsize=14))
-grid.text("b. XGBoost",  x=0.02, y=0.73, just="left", gp=gpar(fontsize=14))
-grid.text("c. AdaBoost", x=0.02, y=0.54, just="left", gp=gpar(fontsize=14))
-grid.text("d. SVM",      x=0.02, y=0.35, just="left", gp=gpar(fontsize=14))
-grid.text("e. MLP",      x=0.02, y=0.16, just="left", gp=gpar(fontsize=14))
-
-
-############ Add deposit labels
-
-grid.text("Beishan",      x=0.27, y=0.03, gp=gpar(fontsize=12))
-grid.text("Zawarmala",    x=0.50, y=0.03, gp=gpar(fontsize=12))
-grid.text("Xulaojiugou",  x=0.73, y=0.03, gp=gpar(fontsize=12))
-
