@@ -23,12 +23,12 @@ library(pROC)
 library(shapviz)
 library(fmsb)
 library(fastshap)
-library(shapviz)
 library(patchwork)
+library(themis)
 
 ############ Import Dataset
 
-dataset <- read.csv("Datasheet.csv")
+dataset <- read.csv("SPHALERITE_CHEMISTRY2025_3.csv")
 
 dataset <- na.omit(dataset)
 
@@ -117,7 +117,7 @@ ggplot(dataset_long,
     aspect.ratio=1
   )
 
-############ Dimensionality Reduction
+############ Part 2: Dimensionality Reduction
 
 dataset_ml <- dataset[,4:16]
 
@@ -306,6 +306,26 @@ y_test <- labels_ml[-train_idx]
 
 num_class <- length(levels(y_train))
 
+############ Apply SMOTE to Training Data Only
+
+library(themis)
+
+train_smote <- data.frame(X_train)
+train_smote$Deposit.type <- as.factor(y_train)
+
+# Apply SMOTE
+smote_data <- themis::smote(
+  train_smote,
+  var = "Deposit.type"
+)
+
+# Extract balanced dataset
+X_train <- smote_data[,1:12]
+y_train <- smote_data$Deposit.type
+
+cat("Class distribution after SMOTE:\n")
+print(table(y_train))
+
 ############ Performance Storage for Radar Plot
 
 performance <- data.frame(
@@ -478,7 +498,7 @@ ggplot(cm_melted,aes(Predicted,True,fill=Count))+
     legend.position="right"
   )
 
-############ ROC Curve – XGBoost
+############ ROC Curve – XGBoost (Multiclass)
 
 library(pROC)
 
@@ -587,109 +607,6 @@ p_roc <- ggplot(roc_df, aes(x = Specificity, y = Sensitivity, color = Class)) +
   )
 
 print(p_roc)
-
-############ SHAP Beeswarm Plot
-
-library(shapviz)
-
-shp <- shapviz(final_model,
-               X_pred = X_train,
-               X = as.data.frame(X_train))
-
-p_bee <- sv_importance(
-  shp,
-  kind = "beeswarm",
-  max_display = 15,
-  size = 0.8,
-  alpha = 0.4
-) +
-  theme_classic(base_size = 9) +
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold"),
-    axis.text = element_text(color = "black"),
-    legend.position = "right"
-  )
-
-print(p_bee)
-
-############ SHAP Feature Importance by Class – Stacked Bar
-
-class_names <- names(shp)
-
-importance_list <- lapply(class_names, function(cls) {
-  
-  shap_mat <- shp[[cls]]$S
-  
-  data.frame(
-    Feature = colnames(shap_mat),
-    Mean_SHAP = colMeans(abs(shap_mat)),
-    Class = cls
-  )
-})
-
-importance_df <- do.call(rbind, importance_list)
-
-# Order features by overall importance
-feature_totals <- tapply(importance_df$Mean_SHAP,
-                         importance_df$Feature,
-                         sum)
-
-feature_order <- names(sort(feature_totals))
-
-importance_df$Feature <- factor(
-  importance_df$Feature,
-  levels = feature_order
-)
-
-# Keep top 12 features
-top_features <- tail(feature_order, 12)
-
-importance_df <- importance_df[
-  importance_df$Feature %in% top_features, ]
-
-############ SHAP Stacked Bar Plot
-
-p_bar <- ggplot(importance_df,
-                aes(x = Mean_SHAP,
-                    y = Feature,
-                    fill = Class)) +
-  
-  geom_bar(stat = "identity",
-           width = 0.65) +
-  
-  scale_fill_manual(
-    values = c("#E41A1C",
-               "#377EB8",
-               "#4DAF4A",
-               "#984EA3",
-               "#FF7F00")
-  ) +
-  
-  scale_x_continuous(expand = expansion(mult = c(0,0.05))) +
-  
-  labs(
-    x = "mean(|SHAP value|) (average impact on model output magnitude)",
-    y = NULL,
-    fill = NULL
-  ) +
-  
-  theme_bw(base_size = 8) +
-  
-  theme(
-    axis.text.y = element_text(size = 8,
-                               color = "black",
-                               face = "bold"),
-    axis.text.x = element_text(size = 7,
-                               color = "black"),
-    panel.grid.major.y = element_blank(),
-    panel.grid.major.x = element_line(linewidth = 0.2,
-                                      color = "grey85"),
-    panel.border = element_rect(color = "black",
-                                fill = NA),
-    legend.position = c(0.82,0.22)
-  )
-
-print(p_bar)
 
 ############ B: Adaboost ############
 
@@ -847,7 +764,7 @@ ggplot(cm_melted, aes(Predicted,True,fill=Count))+
     legend.position = "none"
   )
 
-############ ROC Curve – AdaBoost
+############ ROC Curve – AdaBoost (Multiclass)
 
 library(pROC)
 
@@ -1097,7 +1014,7 @@ ggplot(cm_melted,aes(Predicted,True,fill=Count))+
     legend.position="none"
   )
 
-############ ROC Curve – Random Forest
+############ ROC Curve – Random Forest (Multiclass)
 
 # Predict probabilities
 rf_prob <- predict(rf_model, X_test, type = "prob")
@@ -1129,6 +1046,8 @@ for (i in 1:num_class) {
   roc_list[[class_label]] <- roc_obj
   auc_vals[class_label] <- pROC::auc(roc_obj)
 }
+
+############ Convert ROC data for ggplot
 
 roc_df_list <- lapply(names(roc_list), function(cls){
   
@@ -1187,6 +1106,234 @@ p_roc_rf <- ggplot(roc_df,
 
 print(p_roc_rf)
 
+############ SHAP Analysis – Random Forest (All Classes)
+
+classes <- levels(y_train)
+
+importance_list <- list()
+
+for(i in seq_along(classes)){
+  
+  cat("Computing SHAP for:", classes[i], "\n")
+  
+  pred_fun <- function(object, newdata){
+    
+    pred <- predict(object,
+                    newdata,
+                    type = "prob")
+    
+    pred[,i]
+  }
+  
+  shap_vals <- fastshap::explain(
+    object = rf_model,
+    X = as.data.frame(X_train),
+    pred_wrapper = pred_fun,
+    nsim = 100
+  )
+  
+  ############ Beeswarm Plot
+  
+  shp_rf <- shapviz(
+    shap_vals,
+    X = as.data.frame(X_train)
+  )
+  
+  p_bee_rf <- sv_importance(
+    shp_rf,
+    kind = "beeswarm",
+    max_display = 12,
+    size = 0.8,
+    alpha = 0.4
+  ) +
+    theme_classic(base_size = 9) +
+    labs(
+      title = paste0("SHAP Beeswarm – Random Forest (",classes[i],")")
+    ) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold"),
+      axis.text = element_text(color = "black")
+    )
+  
+  print(p_bee_rf)
+  
+  ############ Feature Importance
+  
+  importance_list[[i]] <- data.frame(
+    Feature = colnames(shap_vals),
+    Mean_SHAP = colMeans(abs(shap_vals)),
+    Class = classes[i]
+  )
+}
+
+############ Combine SHAP values
+
+importance_df <- do.call(rbind, importance_list)
+
+############ Order features
+
+feature_totals <- tapply(
+  importance_df$Mean_SHAP,
+  importance_df$Feature,
+  sum
+)
+
+feature_order <- names(sort(feature_totals))
+
+importance_df$Feature <- factor(
+  importance_df$Feature,
+  levels = feature_order
+)
+
+############ Top 12 features
+
+top_features <- tail(feature_order,12)
+
+importance_df <- importance_df[
+  importance_df$Feature %in% top_features, ]
+
+############ SHAP Stacked Plot
+
+p_bar_rf <- ggplot(
+  importance_df,
+  aes(x = Mean_SHAP,
+      y = Feature,
+      fill = Class)
+) +
+  
+  geom_bar(stat="identity",width = 0.65) +
+  
+  scale_fill_manual(
+    values = c(
+      "#E41A1C",
+      "#377EB8",
+      "#4DAF4A",
+      "#984EA3",
+      "#FF7F00"
+    )
+  ) +
+  
+  scale_x_continuous(expand = expansion(mult = c(0,0.05))) +
+  
+  labs(
+    x = "mean(|SHAP value|)",
+    y = NULL,
+    fill = NULL
+  ) +
+  
+  theme_bw(base_size = 8) +
+  
+  theme(
+    axis.text.y = element_text(size = 8,face = "bold"),
+    axis.text.x = element_text(size = 7),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_line(linewidth = 0.2,color = "grey85"),
+    panel.border = element_rect(color = "black",fill = NA),
+    legend.position = c(0.82,0.22)
+  )
+
+print(p_bar_rf)
+
+############ SHAP FORCE PLOT – ZAWARMALA (Random Forest)
+
+############ Reload Original Dataset
+
+data_original <- read.csv("SPHALERITE_CHEMISTRY2025_3.csv")
+
+############ Extract Zawarmala Deposit
+
+zawar_data <- data_original %>%
+  filter(Deposit == "Zawarmala")
+
+############ Extract Element Columns
+
+X_zawar <- zawar_data %>%
+  select(Fe, Mn, Co, Cu, Ga, Ge, Ag, Cd, In, Sn, Sb, Pb)
+
+############ Replace NA values
+
+for(i in 1:ncol(X_zawar)){
+  
+  X_zawar[[i]][is.na(X_zawar[[i]])] <-
+    median(X_train[,i], na.rm = TRUE)
+}
+
+############ Apply Same Preprocessing
+
+X_zawar_clr <- clr_transform(X_zawar + 1e-6)
+
+X_zawar_scaled <- scale(
+  X_zawar_clr,
+  center = attr(features_scaled,"scaled:center"),
+  scale  = attr(features_scaled,"scaled:scale")
+)
+
+############ Compute Mean Composition
+
+zawar_mean <- as.data.frame(
+  matrix(colMeans(X_zawar_scaled), nrow = 1)
+)
+
+colnames(zawar_mean) <- colnames(X_train)
+
+############ Predict Deposit Type
+
+prob <- predict(rf_model, zawar_mean, type="prob")
+
+print(prob)
+
+pred_class <- colnames(prob)[which.max(prob)]
+
+cat("Predicted Deposit Type for Zawarmala (RF):", pred_class,"\n")
+
+############ SHAP FORCE PLOTS – ZAWARMALA (Random Forest)
+
+deposit_types <- levels(y_train)
+
+for(i in seq_along(deposit_types)){
+  
+  pred_fun <- function(object,newdata){
+    
+    pred <- predict(object,newdata,type="prob")
+    
+    pred[,i]
+  }
+  
+  shap_force <- fastshap::explain(
+    object = rf_model,
+    X = as.data.frame(X_train),
+    pred_wrapper = pred_fun,
+    newdata = zawar_mean,
+    nsim = 50
+  )
+  
+  shp_force <- shapviz(
+    shap_force,
+    X = zawar_mean
+  )
+  
+  p_force_rf <- sv_force(
+    shp_force,
+    row_id = 1,
+    max_display = 12
+  ) +
+    
+    ggtitle(
+      paste0(
+        "SHAP Force Plot – Random Forest (",
+        deposit_types[i],
+        ")  f(x) = ",
+        round(prob[i],3)
+      )
+    ) +
+    
+    theme(
+      plot.title = element_text(hjust = 0.5, face="bold")
+    )
+  
+  print(p_force_rf)
+}
+
 ############ Radar Plots for Model Performance  ############
 
 print(performance)
@@ -1201,7 +1348,9 @@ max_min <- data.frame(
   MCC = c(100,60)
 )
 
-par(mfrow = c(2,2), mar = c(2,2,3,2))
+# Custom layout (2 top plots, 1 bottom centered)
+layout(matrix(c(1,2,3,3), nrow = 2, byrow = TRUE))
+par(mar = c(2,2,3,2))
 
 for(i in 1:nrow(performance)){
   
@@ -1224,3 +1373,4 @@ for(i in 1:nrow(performance)){
     title = performance$Model[i]
   )
 }
+
