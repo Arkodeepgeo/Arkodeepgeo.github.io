@@ -5,7 +5,7 @@
 <h3>Description</h3>
 
 <p>
-Sphalerite, a ubiquitous sulfide mineral in Zn-Pb deposits, exhibits chemical signatures reflecting diverse origins of fluid, metal, and ore-forming processes. This study implements the ensemble machine learning models of XGBoost, AdaBoost, and Random Forest on a compiled, published global database of the trace element analyses of sphalerite. 
+Sphalerite, a ubiquitous sulfide mineral in Zn-Pb deposits, exhibits chemical signatures reflecting diverse origins of fluid, metal, and ore-forming processes. This study implements the ensemble machine learning models of XGBoost, AdaBoost, and Random Forest on a compiled, published global database of the trace element analyses of sphalerite to classify Zn-Pb deposits. 
 </p>
 
 <div style="display:flex; gap:60px; margin-top:20px;">
